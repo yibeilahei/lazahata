@@ -12,12 +12,8 @@ class EpdFont {
 
   const EpdGlyph* getGlyph(uint32_t cp) const;
 
-  /// Returns true if this font covers `cp`: either via its in-RAM interval
-  /// table or, for SD card fonts, via the coverageHandler that consults the
-  /// full RAM-resident coverage index. Unlike getGlyph(), it never performs
-  /// storage I/O and never falls back to the replacement glyph — it reports
-  /// only what this font can render. Used by the CJK UI font fallback to
-  /// decide whether a string needs to be routed to another font.
+  /// True if this font can render `cp`. Does not I/O and does not fall back
+  /// to the replacement glyph.
   bool hasCodepoint(uint32_t cp) const;
 
   /// Returns the kerning adjustment (4.4 fixed-point in pixels) between two codepoints.

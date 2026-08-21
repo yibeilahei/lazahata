@@ -11,7 +11,7 @@
 #include "esp_private/panic_internal.h"
 
 #ifndef LAZAHATA_VERSION
-#define LAZAHATA_VERSION CROSSPOINT_VERSION
+#define LAZAHATA_VERSION "dev"
 #endif
 
 #define MAX_PANIC_STACK_DEPTH 32
@@ -110,8 +110,7 @@ void checkPanic() {
       const size_t written = file.write(panicInfo.c_str(), panicInfo.size());
       file.close();
       if (written == panicInfo.size()) {
-        // Keep the crash data for CrashActivity, but mark it consumed so a
-        // later watchdog reset cannot be mistaken for this panic.
+        // Mark consumed so a later watchdog reset is not treated as this panic.
         panicCaptureMarker = 0;
         LOG_INF("SYS", "Dumped panic info to SD card");
       } else {

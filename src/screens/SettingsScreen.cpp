@@ -8,6 +8,10 @@
 #include "core/Settings.h"
 #include "core/fontIds.h"
 
+#ifndef LAZAHATA_VERSION
+#define LAZAHATA_VERSION "dev"
+#endif
+
 namespace {
 constexpr int kItemCount = 4;
 
@@ -27,11 +31,11 @@ const char* sleepLabel() {
 const char* refreshLabel() {
   switch (settings.refreshEveryNPages) {
     case 1:
-      return "Full refresh: every page";
+      return "Refresh: every page";
     case 10:
-      return "Full refresh: 10 pages";
+      return "Refresh: every 10 pages";
     default:
-      return "Full refresh: 5 pages";
+      return "Refresh: every 5 pages";
   }
 }
 
@@ -117,9 +121,6 @@ void SettingsScreen::render() {
     }
   }
 
-#ifndef LAZAHATA_VERSION
-#define LAZAHATA_VERSION "dev"
-#endif
   gfx.drawCenteredText(FONT_UI, gfx.height() - 40, "Lazahata " LAZAHATA_VERSION);
   gfx.present(HalDisplay::FAST_REFRESH);
 }

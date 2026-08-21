@@ -3,6 +3,7 @@
 #include <EpdFontFamily.h>
 #include <HalDisplay.h>
 
+// Portrait drawing surface. The X3 panel is 792×528 landscape; logical size is 528×792.
 class Gfx {
  public:
   explicit Gfx(HalDisplay& display);

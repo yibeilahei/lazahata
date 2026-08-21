@@ -2,8 +2,8 @@
 
 #include <cstdint>
 
-// XTCH on-disk layout. Copied from CrossPoint's lib/Xtc (MIT).
-// Pages are pre-rendered 2-bit bitmaps; width/height come from the page table.
+// XTCH on-disk layout (from CrossPoint lib/Xtc, MIT).
+// Pages are pre-rendered 2-bit bitmaps. Width and height come from the page table.
 
 namespace xtch {
 

@@ -4,6 +4,7 @@
 
 class MappedInput {
  public:
+  // PageBack/PageForward are the X3 page keys (up/down).
   enum class Button : uint8_t { Back, Confirm, Left, Right, Up, Down, Power, PageBack, PageForward };
 
   explicit MappedInput(HalGPIO& gpio) : gpio(gpio) {}

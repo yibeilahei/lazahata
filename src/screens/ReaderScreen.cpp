@@ -70,7 +70,6 @@ void ReaderScreen::onEnter() {
     page = book.pageCount() > 0 ? book.pageCount() - 1 : 0;
   }
   snprintf(settings.lastBookPath, sizeof(settings.lastBookPath), "%s", bookPath);
-  settings.lastBookPage = page;
   settings.save();
   requestUpdate();
 }
@@ -116,7 +115,6 @@ void ReaderScreen::loop() {
     }
   }
   if (moved) {
-    settings.lastBookPage = page;
     saveProgress();
     requestUpdate();
   }
@@ -148,6 +146,7 @@ void ReaderScreen::render() {
     gfx.drawText(FONT_UI, gfx.width() - w - 12, y, line);
   }
 
+  // FAST on page turns. HALF every N pages to clear ghosting.
   HalDisplay::RefreshMode mode = HalDisplay::FAST_REFRESH;
   if (pagesUntilFull <= 1) {
     mode = HalDisplay::HALF_REFRESH;

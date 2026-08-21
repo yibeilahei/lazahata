@@ -14,7 +14,7 @@ void Gfx::begin() {
   panelWidth = panel.getDisplayWidth();
   panelHeight = panel.getDisplayHeight();
   panelWidthBytes = panel.getDisplayWidthBytes();
-  // Native panel is landscape; logical coordinates are portrait (page-shaped).
+  // Panel is landscape; logical coordinates are portrait.
   logicalWidth = panelHeight;
   logicalHeight = panelWidth;
   LOG_INF("GFX", "Panel %ux%u, logical %dx%d", panelWidth, panelHeight, logicalWidth, logicalHeight);

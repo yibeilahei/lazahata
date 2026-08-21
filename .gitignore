@@ -2,35 +2,25 @@
 .idea
 .DS_Store
 .vscode
-open-x4-sdk
-fs_
-lib/EpdFont/fontsrc
-lib/I18n/I18nKeys.h
-lib/I18n/I18nStrings.h
-lib/I18n/I18nStrings.cpp
-*.generated.h
 .vs
+.history/
+/.cache
+/.venv
 build
 **/__pycache__/
 /compile_commands.json
-/.cache
-.history/
-/.venv
 *.local*
-*.cpfont
-lib/EpdFont/scripts/downloaded_fonts/
-lib/EpdFont/scripts/instanced_fonts/
-lib/EpdFont/scripts/output/
-# Claude Code: keep local agent state out (worktrees, scheduled-task
-# locks, settings.local, scout CLEANUP.md).
-.claude/*
+platformio.local.ini
 /managed_components
 /.dummy
 /CMakeLists.txt
 /dependencies.lock
 /sdkconfig.*
-sdkconfig.sticky
-flake.*
+.claude/*
 
-# CrossXTCH local / PlatformIO
-platformio.local.ini
+lib/EpdFont/fontsrc
+lib/EpdFont/scripts/downloaded_fonts/
+lib/EpdFont/scripts/instanced_fonts/
+lib/EpdFont/scripts/output/
+*.cpfont
+*.generated.h

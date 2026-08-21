@@ -3,7 +3,6 @@
 #include <Arduino.h>
 #include <Imu.h>
 
-// TODO: Move enums into new header and share with CrossPointSettings.h
 namespace CrossPointOrientation {
 enum Value : uint8_t { PORTRAIT = 0, LANDSCAPE_CW = 1, INVERTED = 2, LANDSCAPE_CCW = 3 };
 }
