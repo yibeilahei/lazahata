@@ -1,10 +1,10 @@
-#include "ActivityManager.h"
+#include "core/ActivityManager.h"
 
 #include <HalPowerManager.h>
 #include <Logging.h>
 #include <Memory.h>
 
-#include "Activity.h"
+#include "core/Activity.h"
 #include "screens/BrowserScreen.h"
 #include "screens/HomeScreen.h"
 #include "screens/MessageScreen.h"

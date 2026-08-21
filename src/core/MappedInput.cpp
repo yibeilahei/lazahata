@@ -1,4 +1,4 @@
-#include "MappedInput.h"
+#include "core/MappedInput.h"
 
 uint8_t MappedInput::map(const Button button) const {
   switch (button) {

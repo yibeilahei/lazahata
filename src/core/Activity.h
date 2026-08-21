@@ -5,10 +5,9 @@
 #include <memory>
 #include <utility>
 
-#include "MappedInput.h"
+#include "core/MappedInput.h"
 
 class Gfx;
-class ActivityManager;
 
 class Activity {
   friend class ActivityManager;

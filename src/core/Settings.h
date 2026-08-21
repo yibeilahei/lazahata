@@ -3,10 +3,10 @@
 #include <cstdint>
 
 struct Settings {
-  static constexpr uint32_t MAGIC = 0x48585443;  // "XTCH"
+  static constexpr uint32_t MAGIC = 0x48585443;  // "XTCH" file-format family
   static constexpr uint16_t VERSION = 1;
-  static constexpr const char* kDir = "/.xtch";
-  static constexpr const char* kPath = "/.xtch/settings.bin";
+  static constexpr const char* kDir = "/.lazahata";
+  static constexpr const char* kPath = "/.lazahata/settings.bin";
 
   uint32_t magic = MAGIC;
   uint16_t version = VERSION;

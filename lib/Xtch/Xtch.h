@@ -2,18 +2,18 @@
 
 #include <HalStorage.h>
 
-#include "XtcTypes.h"
+#include "XtchTypes.h"
 
 class Gfx;
 
 // Streaming XTCH reader. The source file is closed between reads so SdFat
 // buffers are not held during a blit.
-class XtcBook {
+class XtchBook {
  public:
-  XtcBook() = default;
-  ~XtcBook();
+  XtchBook() = default;
+  ~XtchBook();
 
-  xtc::Error open(const char* path);
+  xtch::Error open(const char* path);
   void close();
   bool isOpen() const { return opened; }
 
@@ -23,10 +23,9 @@ class XtcBook {
   const char* title() const { return bookTitle; }
   const char* author() const { return bookAuthor; }
   const char* path() const { return filepath; }
-  xtc::Error lastError() const { return error; }
+  xtch::Error lastError() const { return error; }
 
-  bool pageInfo(uint32_t pageIndex, xtc::PageInfo& info);
-  // Blit pageIndex into gfx (1:1, centered). Streams from SD; no full-page buffer.
+  bool pageInfo(uint32_t pageIndex, xtch::PageInfo& info);
   bool drawPage(Gfx& gfx, uint32_t pageIndex);
 
  private:
@@ -34,15 +33,15 @@ class XtcBook {
   char bookTitle[128]{};
   char bookAuthor[64]{};
   HalFile file;
-  xtc::XtcHeader header{};
+  xtch::Header header{};
   uint16_t defaultWidth = 0;
   uint16_t defaultHeight = 0;
   bool opened = false;
-  xtc::Error error = xtc::Error::Ok;
+  xtch::Error error = xtch::Error::Ok;
 
   bool ensureOpen();
   void closeFile();
-  xtc::Error readHeader();
-  xtc::Error readMetadata();
-  bool readPageTableEntry(uint32_t pageIndex, xtc::PageInfo& info);
+  xtch::Error readHeader();
+  xtch::Error readMetadata();
+  bool readPageTableEntry(uint32_t pageIndex, xtch::PageInfo& info);
 };

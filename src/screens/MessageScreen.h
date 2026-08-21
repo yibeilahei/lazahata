@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Activity.h"
+#include "core/Activity.h"
 
 class MessageScreen final : public Activity {
   char text[96]{};

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Activity.h"
+#include "core/Activity.h"
 
 class SettingsScreen final : public Activity {
   int index = 0;

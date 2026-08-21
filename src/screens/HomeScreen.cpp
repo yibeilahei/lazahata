@@ -6,9 +6,9 @@
 
 #include <cstdio>
 
-#include "ActivityManager.h"
-#include "Settings.h"
-#include "fontIds.h"
+#include "core/ActivityManager.h"
+#include "core/Settings.h"
+#include "core/fontIds.h"
 
 void HomeScreen::onEnter() {
   Activity::onEnter();
@@ -40,7 +40,7 @@ void HomeScreen::loop() {
 
 void HomeScreen::render() {
   gfx.clear(false);
-  gfx.drawCenteredText(FONT_UI_BOLD, 36, "CrossXTCH");
+  gfx.drawCenteredText(FONT_UI_BOLD, 36, "Lazahata");
 
   char bat[16];
   snprintf(bat, sizeof(bat), "%u%%", static_cast<unsigned>(powerManager.getBatteryPercentage()));

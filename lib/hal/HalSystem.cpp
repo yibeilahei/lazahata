@@ -10,6 +10,10 @@
 #include "esp_private/esp_system_attr.h"
 #include "esp_private/panic_internal.h"
 
+#ifndef LAZAHATA_VERSION
+#define LAZAHATA_VERSION CROSSPOINT_VERSION
+#endif
+
 #define MAX_PANIC_STACK_DEPTH 32
 #define PANIC_CAPTURE_MAGIC 0x50414E49u
 
@@ -134,7 +138,7 @@ std::string getPanicInfo(bool full) {
   } else {
     std::string info;
 
-    info += "CrossPoint version: " CROSSPOINT_VERSION;
+    info += "Lazahata version: " LAZAHATA_VERSION;
     info += "\n\nPanic reason: " + std::string(panicMessage);
     info += "\n\nLast logs:\n" + getLastLogs();
     info += "\n\nStack memory:\n";

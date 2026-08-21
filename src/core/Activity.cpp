@@ -1,6 +1,6 @@
-#include "Activity.h"
+#include "core/Activity.h"
 
-#include "ActivityManager.h"
+#include "core/ActivityManager.h"
 
 void Activity::requestUpdate() { activityManager.requestUpdate(); }
 void Activity::finish() { activityManager.pop(); }

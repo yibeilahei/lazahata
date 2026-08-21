@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "Activity.h"
+#include "core/Activity.h"
 
 class BrowserScreen final : public Activity {
   char path[256] = "/";

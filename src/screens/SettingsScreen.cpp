@@ -5,8 +5,8 @@
 
 #include <cstdio>
 
-#include "Settings.h"
-#include "fontIds.h"
+#include "core/Settings.h"
+#include "core/fontIds.h"
 
 namespace {
 constexpr int kItemCount = 4;
@@ -117,9 +117,9 @@ void SettingsScreen::render() {
     }
   }
 
-#ifndef XTCH_VERSION
-#define XTCH_VERSION "dev"
+#ifndef LAZAHATA_VERSION
+#define LAZAHATA_VERSION "dev"
 #endif
-  gfx.drawCenteredText(FONT_UI, gfx.height() - 40, "CrossXTCH " XTCH_VERSION);
+  gfx.drawCenteredText(FONT_UI, gfx.height() - 40, "Lazahata " LAZAHATA_VERSION);
   gfx.present(HalDisplay::FAST_REFRESH);
 }

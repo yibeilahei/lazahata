@@ -3,8 +3,8 @@
 #include <memory>
 #include <vector>
 
-#include "Activity.h"
-#include "MappedInput.h"
+#include "core/Activity.h"
+#include "core/MappedInput.h"
 
 class Gfx;
 

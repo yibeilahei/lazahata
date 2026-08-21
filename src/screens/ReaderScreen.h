@@ -1,12 +1,12 @@
 #pragma once
 
-#include <Xtc.h>
+#include <Xtch.h>
 
-#include "Activity.h"
+#include "core/Activity.h"
 
 class ReaderScreen final : public Activity {
   char bookPath[256]{};
-  XtcBook book;
+  XtchBook book;
   uint32_t page = 0;
   int pagesUntilFull = 0;
   bool loaded = false;

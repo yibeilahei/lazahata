@@ -7,8 +7,8 @@
 #include <cstdio>
 #include <cstring>
 
-#include "Settings.h"
-#include "fontIds.h"
+#include "core/Settings.h"
+#include "core/fontIds.h"
 
 namespace {
 uint32_t pathHash(const char* path) {
@@ -58,8 +58,8 @@ void ReaderScreen::saveProgress() const {
 void ReaderScreen::onEnter() {
   Activity::onEnter();
   pagesUntilFull = settings.refreshEveryNPages;
-  if (book.open(bookPath) != xtc::Error::Ok) {
-    LOG_ERR("RDR", "Failed to open %s: %s", bookPath, xtc::errorName(book.lastError()));
+  if (book.open(bookPath) != xtch::Error::Ok) {
+    LOG_ERR("RDR", "Failed to open %s: %s", bookPath, xtch::errorName(book.lastError()));
     loaded = false;
     requestUpdate();
     return;
@@ -126,14 +126,14 @@ void ReaderScreen::render() {
   if (!loaded) {
     gfx.clear(false);
     gfx.drawCenteredText(FONT_UI_BOLD, gfx.height() / 2 - 20, "Could not open book");
-    gfx.drawCenteredText(FONT_UI, gfx.height() / 2 + 10, xtc::errorName(book.lastError()));
+    gfx.drawCenteredText(FONT_UI, gfx.height() / 2 + 10, xtch::errorName(book.lastError()));
     gfx.present(HalDisplay::HALF_REFRESH);
     return;
   }
 
   if (!book.drawPage(gfx, page)) {
     gfx.clear(false);
-    gfx.drawCenteredText(FONT_UI_BOLD, gfx.height() / 2, xtc::errorName(book.lastError()));
+    gfx.drawCenteredText(FONT_UI_BOLD, gfx.height() / 2, xtch::errorName(book.lastError()));
     gfx.present(HalDisplay::HALF_REFRESH);
     return;
   }

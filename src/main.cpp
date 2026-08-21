@@ -13,13 +13,14 @@
 #include <WiFi.h>
 #include <builtinFonts/all.h>
 
-#include "ActivityManager.h"
-#include "MappedInput.h"
-#include "Settings.h"
-#include "fontIds.h"
+#include "core/ActivityManager.h"
+#include "core/MappedInput.h"
+#include "core/Power.h"
+#include "core/Settings.h"
+#include "core/fontIds.h"
 
-#ifndef XTCH_VERSION
-#define XTCH_VERSION "dev"
+#ifndef LAZAHATA_VERSION
+#define LAZAHATA_VERSION "dev"
 #endif
 
 Gfx gfx(display);
@@ -31,8 +32,12 @@ EpdFont ui12BoldFont(&ubuntu_12_bold);
 EpdFontFamily ui12Family(&ui12RegularFont, &ui12BoldFont);
 EpdFontFamily ui12BoldFamily(&ui12BoldFont, &ui12BoldFont);
 
-static unsigned long allowSleepAt = 0;
-static bool wakePowerReleasePending = false;
+static void setupDisplayAndFonts() {
+  display.begin();
+  gfx.begin();
+  gfx.insertFont(FONT_UI, &ui12Family);
+  gfx.insertFont(FONT_UI_BOLD, &ui12BoldFamily);
+}
 
 void setup() {
 #ifdef ENABLE_SERIAL_LOG
@@ -51,14 +56,11 @@ void setup() {
   halClock.begin();
 
   const auto wakeupReason = gpio.getWakeupReason();
-  LOG_INF("MAIN", "CrossXTCH " XTCH_VERSION " device=%s", BoardConfig::ACTIVE.name);
+  LOG_INF("MAIN", "Lazahata " LAZAHATA_VERSION " device=%s", BoardConfig::ACTIVE.name);
 
   if (!Storage.begin()) {
     LOG_ERR("MAIN", "SD init failed");
-    display.begin();
-    gfx.begin();
-    gfx.insertFont(FONT_UI, &ui12Family);
-    gfx.insertFont(FONT_UI_BOLD, &ui12BoldFamily);
+    setupDisplayAndFonts();
     activityManager.showMessage("SD card error");
     return;
   }
@@ -72,7 +74,7 @@ void setup() {
       if (!gpio.verifyPowerButtonWakeup(800, true)) {
         powerManager.startDeepSleep(gpio);
       }
-      wakePowerReleasePending = true;
+      power::noteWakeHold();
       break;
     case HalGPIO::WakeupReason::AfterUSBPower:
       powerManager.startDeepSleep(gpio);
@@ -81,10 +83,7 @@ void setup() {
       break;
   }
 
-  display.begin();
-  gfx.begin();
-  gfx.insertFont(FONT_UI, &ui12Family);
-  gfx.insertFont(FONT_UI_BOLD, &ui12BoldFamily);
+  setupDisplayAndFonts();
   display.setInverted(settings.nightMode != 0);
 
   if (wakeupReason == HalGPIO::WakeupReason::PowerButton && settings.lastBookPath[0] != '\0' &&
@@ -93,50 +92,17 @@ void setup() {
   } else {
     activityManager.goHome();
   }
-
-  allowSleepAt = millis() + 2000;
 }
 
 void loop() {
   mappedInput.update();
-
-  if (wakePowerReleasePending && !gpio.isPressed(HalGPIO::BTN_POWER)) {
-    wakePowerReleasePending = false;
+  if (power::consumeWakeRelease(gpio)) {
     return;
   }
-
-  static unsigned long lastActivity = millis();
-  if (gpio.wasAnyPressed() || gpio.wasAnyReleased()) {
-    lastActivity = millis();
-    powerManager.setPowerSaving(false);
-  }
-
-  static bool powerReleasedSinceWake = false;
-  if (!gpio.isPressed(HalGPIO::BTN_POWER)) {
-    powerReleasedSinceWake = true;
-  }
-  if (powerReleasedSinceWake && millis() >= allowSleepAt && gpio.isPressed(HalGPIO::BTN_POWER) &&
-      gpio.getPowerButtonHeldTime() > 800) {
-    LOG_INF("SLP", "Power hold, sleeping");
-    display.deepSleep();
-    powerManager.startDeepSleep(gpio);
+  power::noteUserActivity(gpio);
+  if (power::maybeSleep(gpio, settings)) {
     return;
   }
-
-  const unsigned long sleepMs = settings.sleepTimeoutMs();
-  if (sleepMs > 0 && millis() - lastActivity >= sleepMs) {
-    LOG_INF("SLP", "Idle timeout");
-    display.deepSleep();
-    powerManager.startDeepSleep(gpio);
-    return;
-  }
-
   activityManager.loop();
-
-  if (millis() - lastActivity >= HalPowerManager::IDLE_POWER_SAVING_MS) {
-    powerManager.setPowerSaving(true);
-    delay(50);
-  } else {
-    delay(10);
-  }
+  power::idleDelay();
 }

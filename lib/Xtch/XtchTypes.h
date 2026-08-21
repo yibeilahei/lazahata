@@ -5,13 +5,13 @@
 // XTCH on-disk layout. Copied from CrossPoint's lib/Xtc (MIT).
 // Pages are pre-rendered 2-bit bitmaps; width/height come from the page table.
 
-namespace xtc {
+namespace xtch {
 
 constexpr uint32_t XTCH_MAGIC = 0x48435458;  // "XTCH"
 constexpr uint32_t XTH_MAGIC = 0x00485458;   // "XTH\0"
 
 #pragma pack(push, 1)
-struct XtcHeader {
+struct Header {
   uint32_t magic;
   uint8_t versionMajor;
   uint8_t versionMinor;
@@ -36,7 +36,7 @@ struct PageTableEntry {
   uint16_t height;
 };
 
-struct XthPageHeader {
+struct PageHeader {
   uint32_t magic;
   uint16_t width;
   uint16_t height;
@@ -88,4 +88,4 @@ inline const char* errorName(Error err) {
   }
 }
 
-}  // namespace xtc
+}  // namespace xtch

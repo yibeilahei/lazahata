@@ -7,8 +7,8 @@
 #include <algorithm>
 #include <cstring>
 
-#include "ActivityManager.h"
-#include "fontIds.h"
+#include "core/ActivityManager.h"
+#include "core/fontIds.h"
 
 namespace {
 bool hasXtchExt(const char* name) {

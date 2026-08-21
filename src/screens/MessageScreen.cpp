@@ -4,7 +4,7 @@
 
 #include <cstring>
 
-#include "fontIds.h"
+#include "core/fontIds.h"
 
 MessageScreen::MessageScreen(Gfx& gfx, MappedInput& input, const char* message) : Activity("Message", gfx, input) {
   snprintf(text, sizeof(text), "%s", message ? message : "");
