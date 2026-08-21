@@ -1,105 +1,48 @@
-/**
- * Xtc.h
- *
- * Main XTC ebook class for CrossPoint Reader
- * Provides EPUB-like interface for XTC file handling
- */
-
 #pragma once
 
-#include <memory>
-#include <string>
-#include <vector>
+#include <HalStorage.h>
 
-#include "Xtc/XtcParser.h"
-#include "Xtc/XtcTypes.h"
+#include "XtcTypes.h"
 
-/**
- * XTC Ebook Handler
- *
- * Handles XTC file loading, page access, and cover image generation.
- * Interface is designed to be similar to Epub class for easy integration.
- */
-class Xtc {
-  std::string filepath;
-  std::string cachePath;
-  std::unique_ptr<xtc::XtcParser> parser;
-  bool loaded;
+class Gfx;
 
+// Streaming XTCH reader. The source file is closed between reads so SdFat
+// buffers are not held during a blit.
+class XtcBook {
  public:
-  explicit Xtc(std::string filepath, const std::string& cacheDir) : filepath(std::move(filepath)), loaded(false) {
-    // Create cache key based on filepath (same as Epub)
-    cachePath = cacheDir + "/xtc_" + std::to_string(std::hash<std::string>{}(this->filepath));
-  }
-  ~Xtc() = default;
+  XtcBook() = default;
+  ~XtcBook();
 
-  /**
-   * Load XTC file
-   * @return true on success
-   */
-  bool load();
+  xtc::Error open(const char* path);
+  void close();
+  bool isOpen() const { return opened; }
 
-  /**
-   * Clear cached data
-   * @return true on success
-   */
-  bool clearCache() const;
+  uint16_t pageCount() const { return header.pageCount; }
+  uint16_t pageWidth() const { return defaultWidth; }
+  uint16_t pageHeight() const { return defaultHeight; }
+  const char* title() const { return bookTitle; }
+  const char* author() const { return bookAuthor; }
+  const char* path() const { return filepath; }
+  xtc::Error lastError() const { return error; }
 
-  /**
-   * Setup cache directory
-   */
-  void setupCacheDir() const;
+  bool pageInfo(uint32_t pageIndex, xtc::PageInfo& info);
+  // Blit pageIndex into gfx (1:1, centered). Streams from SD; no full-page buffer.
+  bool drawPage(Gfx& gfx, uint32_t pageIndex);
 
-  // Path accessors
-  const std::string& getCachePath() const { return cachePath; }
-  const std::string& getPath() const { return filepath; }
+ private:
+  char filepath[256]{};
+  char bookTitle[128]{};
+  char bookAuthor[64]{};
+  HalFile file;
+  xtc::XtcHeader header{};
+  uint16_t defaultWidth = 0;
+  uint16_t defaultHeight = 0;
+  bool opened = false;
+  xtc::Error error = xtc::Error::Ok;
 
-  // Metadata
-  std::string getTitle() const;
-  std::string getAuthor() const;
-  bool hasChapters() const;
-  const std::vector<xtc::ChapterInfo>& getChapters();
-
-  // Cover image support (for sleep screen)
-  std::string getCoverBmpPath() const;
-  bool generateCoverBmp() const;
-  // Thumbnail support (for Continue Reading card)
-  std::string getThumbBmpPath() const;
-  std::string getThumbBmpPath(int height) const;
-  bool generateThumbBmp(int height) const;
-
-  // Page access
-  uint32_t getPageCount() const;
-  uint16_t getPageWidth() const;
-  uint16_t getPageHeight() const;
-  uint8_t getBitDepth() const;  // 1 = XTC (1-bit), 2 = XTCH (2-bit)
-
-  /**
-   * Load page bitmap data
-   * @param pageIndex Page index (0-based)
-   * @param buffer Output buffer
-   * @param bufferSize Buffer size
-   * @return Number of bytes read
-   */
-  size_t loadPage(uint32_t pageIndex, uint8_t* buffer, size_t bufferSize) const;
-
-  /**
-   * Load page with streaming callback
-   * @param pageIndex Page index
-   * @param callback Callback for each chunk
-   * @param chunkSize Chunk size
-   * @return Error code
-   */
-  xtc::XtcError loadPageStreaming(uint32_t pageIndex,
-                                  std::function<void(const uint8_t* data, size_t size, size_t offset)> callback,
-                                  size_t chunkSize = 1024) const;
-
-  // Progress calculation
-  uint8_t calculateProgress(uint32_t currentPage) const;
-
-  // Check if file is loaded
-  bool isLoaded() const { return loaded; }
-
-  // Error information
-  xtc::XtcError getLastError() const;
+  bool ensureOpen();
+  void closeFile();
+  xtc::Error readHeader();
+  xtc::Error readMetadata();
+  bool readPageTableEntry(uint32_t pageIndex, xtc::PageInfo& info);
 };

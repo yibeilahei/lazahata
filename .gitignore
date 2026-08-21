@@ -31,3 +31,6 @@ lib/EpdFont/scripts/output/
 /sdkconfig.*
 sdkconfig.sticky
 flake.*
+
+# CrossXTCH local / PlatformIO
+platformio.local.ini

@@ -2,3 +2,7 @@
 	path = freeink-sdk
 	url = https://github.com/Free-Ink/freeink-sdk.git
 	branch = main
+[submodule "reference"]
+	path = reference
+	url = https://github.com/crosspoint-reader/crosspoint-reader.git
+	branch = develop

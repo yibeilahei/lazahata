@@ -1,7 +1,6 @@
 #include <HalGPIO.h>
 #include <Logging.h>
 #include <PowerManager.h>
-#include <Preferences.h>
 #include <SPI.h>
 #include <Wire.h>
 #include <XteinkDetect.h>
@@ -41,99 +40,31 @@ bool readBQ27220CurrentMA(int16_t* outCurrent) {
 
 }  // namespace X3GPIO
 
-namespace {
-constexpr char HW_NAMESPACE[] = "cphw";
-constexpr char NVS_KEY_DEV_OVERRIDE[] = "dev_ovr";  // 0=auto, 1=x4, 2=x3
-constexpr char NVS_KEY_DEV_CACHED[] = "dev_det";    // 0=unknown, 1=x4, 2=x3
-
-enum class NvsDeviceValue : uint8_t { Unknown = 0, X4 = 1, X3 = 2 };
-
-NvsDeviceValue readNvsDeviceValue(const char* key, NvsDeviceValue defaultValue) {
-  Preferences prefs;
-  if (!prefs.begin(HW_NAMESPACE, true)) {
-    return defaultValue;
-  }
-  const uint8_t raw = prefs.getUChar(key, static_cast<uint8_t>(defaultValue));
-  prefs.end();
-  if (raw > static_cast<uint8_t>(NvsDeviceValue::X3)) {
-    return defaultValue;
-  }
-  return static_cast<NvsDeviceValue>(raw);
-}
-
-void writeNvsDeviceValue(const char* key, NvsDeviceValue value) {
-  Preferences prefs;
-  if (!prefs.begin(HW_NAMESPACE, false)) {
-    return;
-  }
-  prefs.putUChar(key, static_cast<uint8_t>(value));
-  prefs.end();
-}
-
-HalGPIO::DeviceType nvsToDeviceType(NvsDeviceValue value) {
-  return value == NvsDeviceValue::X3 ? HalGPIO::DeviceType::X3 : HalGPIO::DeviceType::X4;
-}
-
-HalGPIO::DeviceType detectDeviceTypeWithFingerprint() {
-  // Explicit override for recovery/support:
-  // 0 = auto, 1 = force X4, 2 = force X3
-  const NvsDeviceValue overrideValue = readNvsDeviceValue(NVS_KEY_DEV_OVERRIDE, NvsDeviceValue::Unknown);
-  if (overrideValue == NvsDeviceValue::X3 || overrideValue == NvsDeviceValue::X4) {
-    LOG_INF("HW", "Device override active: %s", overrideValue == NvsDeviceValue::X3 ? "X3" : "X4");
-    return nvsToDeviceType(overrideValue);
-  }
-
-  const NvsDeviceValue cachedValue = readNvsDeviceValue(NVS_KEY_DEV_CACHED, NvsDeviceValue::Unknown);
-  if (cachedValue == NvsDeviceValue::X3 || cachedValue == NvsDeviceValue::X4) {
-    LOG_INF("HW", "Using cached device type: %s", cachedValue == NvsDeviceValue::X3 ? "X3" : "X4");
-    return nvsToDeviceType(cachedValue);
-  }
-
-  // No cache yet: use FreeInk's canonical two-pass X3 fingerprint and persist
-  // only confirmed results. Inconclusive probes deliberately remain uncached.
-  uint8_t score1 = 0;
-  uint8_t score2 = 0;
-  const freeink::XteinkVerdict verdict = freeink::detectXteinkVerdict(&score1, &score2);
-  LOG_INF("HW", "Xteink probe scores: pass1=%u pass2=%u verdict=%u", score1, score2, static_cast<unsigned>(verdict));
-
-  if (verdict == freeink::XteinkVerdict::X3Confirmed) {
-    writeNvsDeviceValue(NVS_KEY_DEV_CACHED, NvsDeviceValue::X3);
-    return HalGPIO::DeviceType::X3;
-  }
-
-  if (verdict == freeink::XteinkVerdict::X4Confirmed) {
-    writeNvsDeviceValue(NVS_KEY_DEV_CACHED, NvsDeviceValue::X4);
-    return HalGPIO::DeviceType::X4;
-  }
-
-  // Conservative fallback for first boot with inconclusive probes.
-  return HalGPIO::DeviceType::X4;
-}
-
-}  // namespace
-
 void HalGPIO::begin() {
-#if FREEINK_MCU_C3
-  _deviceType = detectDeviceTypeWithFingerprint();
-  BoardConfig::selectDevice(deviceIsX3() ? BoardConfig::Board::XteinkX3 : BoardConfig::Board::XteinkX4);
+#if FREEINK_DEVICE_X3 && !FREEINK_DEVICE_X4
+  _deviceType = DeviceType::X3;
+  BoardConfig::selectDevice(BoardConfig::Board::XteinkX3);
+#elif FREEINK_DEVICE_X4 && !FREEINK_DEVICE_X3
+  _deviceType = DeviceType::X4;
+  BoardConfig::selectDevice(BoardConfig::Board::XteinkX4);
+#else
+#error "Build one device per firmware env (e.g. -DFREEINK_DEVICE_X3=1)."
+#endif
 
-  // Resolve the per-batch controller before SPI owns the display pins. FreeInk
-  // checks the OEM hw_calib/screenType value first, then falls back to its
-  // two-pass display-bus probe. X3's facade keys panel selection off the sibling
-  // board profile, so preserve a detected UC8279 through setDisplayX3().
+#if FREEINK_DEVICE_X3
+  // X3 production batches are UC8253 or UC8279 on the same glass. Probe before
+  // SPI owns the display pins and switch the sibling profile if needed.
   freeink::applyXteinkDisplayController();
-  if (deviceIsX3() && BoardConfig::ACTIVE.displayController == BoardConfig::DisplayController::UC8279) {
+  if (BoardConfig::ACTIVE.displayController == BoardConfig::DisplayController::UC8279) {
     BoardConfig::selectDevice(BoardConfig::Board::XteinkX3Uc8279);
   }
+#endif
 
   SPI.begin(EPD_SCLK, SPI_MISO, EPD_MOSI, EPD_CS);
 
-  if (deviceIsX4()) {
-    pinMode(BAT_GPIO0, INPUT);
-    pinMode(UART0_RXD, INPUT);
-  }
-#else
-  _deviceType = DeviceType::X4;
+#if FREEINK_DEVICE_X4
+  pinMode(BAT_GPIO0, INPUT);
+  pinMode(UART0_RXD, INPUT);
 #endif
   inputMgr.begin();
 }

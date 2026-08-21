@@ -1,0 +1,9 @@
+Copied files retain their original copyright.
+
+- lib/hal, lib/Logging, lib/Memory/Memory.h, lib/Utf8, lib/EpdFont
+  (except the new builtinFonts/all.h), src/platform/skip_efuse_blk_check.c,
+  and the XTC on-disk layout in lib/Xtc/XtcTypes.h come from CrossPoint Reader,
+  MIT License, Copyright (c) 2025 Dave Allie.
+- Ubuntu font binaries under lib/EpdFont/builtinFonts/ are generated from
+  Ubuntu (UFL) and Noto (OFL) sources as in the CrossPoint tree.
+- freeink-sdk is used as a sibling dependency (MIT).
