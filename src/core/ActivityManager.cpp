@@ -81,6 +81,7 @@ void ActivityManager::push(std::unique_ptr<Activity> activity) {
 void ActivityManager::pop() { pendingAction = Pending::Pop; }
 
 void ActivityManager::goHome() {
+  LOG_INF("ACT", "Home");
   auto home = makeUniqueNoThrow<HomeScreen>(gfx, input);
   if (!home) {
     LOG_ERR("ACT", "OOM: home");
@@ -90,6 +91,7 @@ void ActivityManager::goHome() {
 }
 
 void ActivityManager::goToReader(const char* path) {
+  LOG_INF("ACT", "Reader %s", path ? path : "");
   auto reader = makeUniqueNoThrow<ReaderScreen>(gfx, input, path);
   if (!reader) {
     LOG_ERR("ACT", "OOM: reader");
@@ -99,6 +101,7 @@ void ActivityManager::goToReader(const char* path) {
 }
 
 void ActivityManager::goToBrowser() {
+  LOG_INF("ACT", "Browser");
   auto browser = makeUniqueNoThrow<BrowserScreen>(gfx, input, "/");
   if (!browser) {
     LOG_ERR("ACT", "OOM: browser");
@@ -108,6 +111,7 @@ void ActivityManager::goToBrowser() {
 }
 
 void ActivityManager::goToSettings() {
+  LOG_INF("ACT", "Settings");
   auto screen = makeUniqueNoThrow<SettingsScreen>(gfx, input);
   if (!screen) {
     LOG_ERR("ACT", "OOM: settings");
@@ -116,7 +120,22 @@ void ActivityManager::goToSettings() {
   push(std::move(screen));
 }
 
+void ActivityManager::goToFirmwareUpdate(const bool recovery) {
+  LOG_INF("ACT", "Firmware picker recovery=%d", recovery ? 1 : 0);
+  auto browser = makeUniqueNoThrow<BrowserScreen>(gfx, input, "/", BrowserScreen::Mode::Firmware, recovery);
+  if (!browser) {
+    LOG_ERR("ACT", "OOM: firmware");
+    return;
+  }
+  if (recovery) {
+    replace(std::move(browser));
+  } else {
+    push(std::move(browser));
+  }
+}
+
 void ActivityManager::showMessage(const char* text) {
+  LOG_INF("ACT", "Message: %s", text ? text : "");
   auto screen = makeUniqueNoThrow<MessageScreen>(gfx, input, text);
   if (!screen) {
     LOG_ERR("ACT", "OOM: message");

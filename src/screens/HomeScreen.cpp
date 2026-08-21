@@ -3,6 +3,7 @@
 #include <Gfx.h>
 #include <HalPowerManager.h>
 #include <HalStorage.h>
+#include <Logging.h>
 
 #include <cstdio>
 
@@ -12,10 +13,12 @@
 
 void HomeScreen::onEnter() {
   Activity::onEnter();
-  itemCount = settings.lastBookPath[0] != '\0' && Storage.exists(settings.lastBookPath) ? 3 : 2;
+  const bool hasContinue = settings.lastBookPath[0] != '\0' && Storage.exists(settings.lastBookPath);
+  itemCount = hasContinue ? 3 : 2;
   if (index >= itemCount) {
     index = 0;
   }
+  LOG_INF("HOME", "Continue %s last='%s'", hasContinue ? "yes" : "no", settings.lastBookPath);
   requestUpdate();
 }
 
@@ -29,10 +32,13 @@ void HomeScreen::loop() {
   } else if (input.wasReleased(MappedInput::Button::Confirm)) {
     const bool hasContinue = itemCount == 3;
     if (hasContinue && index == 0) {
+      LOG_DBG("HOME", "Continue");
       goToReader(settings.lastBookPath);
     } else if ((hasContinue && index == 1) || (!hasContinue && index == 0)) {
+      LOG_DBG("HOME", "Browse");
       activityManager.goToBrowser();
     } else {
+      LOG_DBG("HOME", "Settings");
       activityManager.goToSettings();
     }
   }

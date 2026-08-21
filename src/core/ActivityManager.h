@@ -31,9 +31,11 @@ class ActivityManager {
   void goToReader(const char* path);
   void goToBrowser();
   void goToSettings();
+  void goToFirmwareUpdate(bool recovery = false);
   void showMessage(const char* text);
 
   bool isReader() const { return current && current->isReader(); }
+  bool blocksSleep() const { return current && current->blocksSleep(); }
   Activity* currentActivity() const { return current.get(); }
 };
 

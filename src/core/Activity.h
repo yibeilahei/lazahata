@@ -26,6 +26,7 @@ class Activity {
   virtual void render() {}
   virtual bool isReader() const { return false; }
   virtual bool isHome() const { return false; }
+  virtual bool blocksSleep() const { return false; }
 
   void requestUpdate();
   void finish();

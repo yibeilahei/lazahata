@@ -2,9 +2,11 @@
 
 #include <Gfx.h>
 #include <HalDisplay.h>
+#include <Logging.h>
 
 #include <cstdio>
 
+#include "core/ActivityManager.h"
 #include "core/Settings.h"
 #include "core/fontIds.h"
 
@@ -13,7 +15,7 @@
 #endif
 
 namespace {
-constexpr int kItemCount = 4;
+constexpr int kItemCount = 5;
 
 const char* sleepLabel() {
   switch (settings.sleepTimeoutMinutes) {
@@ -86,11 +88,18 @@ void SettingsScreen::loop() {
   } else if (input.wasReleased(MappedInput::Button::Confirm)) {
     if (index == 0) {
       bumpSleep();
+      LOG_INF("SET", "%s", sleepLabel());
     } else if (index == 1) {
       bumpRefresh();
+      LOG_INF("SET", "%s", refreshLabel());
     } else if (index == 2) {
       settings.nightMode = settings.nightMode ? 0 : 1;
       display.setInverted(settings.nightMode != 0);
+      LOG_INF("SET", "Night mode %s", settings.nightMode ? "on" : "off");
+    } else if (index == 3) {
+      settings.save();
+      activityManager.goToFirmwareUpdate();
+      return;
     } else {
       settings.save();
       finish();
@@ -107,7 +116,7 @@ void SettingsScreen::render() {
 
   char night[32];
   snprintf(night, sizeof(night), "Night mode: %s", settings.nightMode ? "on" : "off");
-  const char* labels[kItemCount] = {sleepLabel(), refreshLabel(), night, "Back"};
+  const char* labels[kItemCount] = {sleepLabel(), refreshLabel(), night, "Update firmware", "Back"};
 
   const int rowH = gfx.lineHeight(FONT_UI) + 10;
   const int startY = 90;

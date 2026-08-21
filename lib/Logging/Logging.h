@@ -41,6 +41,10 @@ static HardwareSerial& logSerial = Serial;
 
 void logPrintf(const char* level, const char* origin, const char* format, ...);
 
+// Optional extra sink (SD card, etc.). `urgent` is true for ERR and INF.
+using LogSinkFn = void (*)(const char* line, bool urgent);
+void setLogSink(LogSinkFn fn);
+
 #ifdef ENABLE_SERIAL_LOG
 #if LOG_LEVEL >= 0
 #define LOG_ERR(origin, format, ...) logPrintf("ERR", origin, format "\n", ##__VA_ARGS__)

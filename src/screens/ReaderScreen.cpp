@@ -35,11 +35,16 @@ void ReaderScreen::loadProgress() {
   HalFile f;
   if (!Storage.openFileForRead("PRG", p, f)) {
     page = 0;
+    LOG_INF("RDR", "No progress file, start at 0");
     return;
   }
   uint32_t saved = 0;
   if (f.read(&saved, sizeof(saved)) == static_cast<int>(sizeof(saved))) {
     page = saved;
+    LOG_INF("RDR", "Progress %s -> page %lu", p, static_cast<unsigned long>(page));
+  } else {
+    page = 0;
+    LOG_ERR("RDR", "Progress file %s unreadable", p);
   }
 }
 
@@ -67,10 +72,13 @@ void ReaderScreen::onEnter() {
   loaded = true;
   loadProgress();
   if (page >= book.pageCount()) {
+    LOG_INF("RDR", "Saved page %lu past end (%u), clamping", static_cast<unsigned long>(page), book.pageCount());
     page = book.pageCount() > 0 ? book.pageCount() - 1 : 0;
   }
   snprintf(settings.lastBookPath, sizeof(settings.lastBookPath), "%s", bookPath);
   settings.save();
+  LOG_INF("RDR", "Open %s page %lu/%u '%s'", bookPath, static_cast<unsigned long>(page + 1), book.pageCount(),
+          book.title());
   requestUpdate();
 }
 
@@ -96,6 +104,7 @@ void ReaderScreen::loop() {
   }
   if (input.wasReleased(MappedInput::Button::Confirm)) {
     overlay = !overlay;
+    LOG_DBG("RDR", "Overlay %s", overlay ? "on" : "off");
     requestUpdate();
     return;
   }
@@ -106,15 +115,20 @@ void ReaderScreen::loop() {
     if (page + 1 < book.pageCount()) {
       ++page;
       moved = true;
+    } else {
+      LOG_DBG("RDR", "Already last page");
     }
   } else if (input.wasReleased(MappedInput::Button::PageBack) || input.wasReleased(MappedInput::Button::Left) ||
              input.wasReleased(MappedInput::Button::Up)) {
     if (page > 0) {
       --page;
       moved = true;
+    } else {
+      LOG_DBG("RDR", "Already first page");
     }
   }
   if (moved) {
+    LOG_DBG("RDR", "Page %lu/%u", static_cast<unsigned long>(page + 1), book.pageCount());
     saveProgress();
     requestUpdate();
   }
@@ -129,12 +143,15 @@ void ReaderScreen::render() {
     return;
   }
 
+  const unsigned long blitStart = millis();
   if (!book.drawPage(gfx, page)) {
+    LOG_ERR("RDR", "Blit page %lu failed: %s", static_cast<unsigned long>(page), xtch::errorName(book.lastError()));
     gfx.clear(false);
     gfx.drawCenteredText(FONT_UI_BOLD, gfx.height() / 2, xtch::errorName(book.lastError()));
     gfx.present(HalDisplay::HALF_REFRESH);
     return;
   }
+  const unsigned long blitMs = millis() - blitStart;
 
   if (overlay) {
     char line[48];
@@ -154,5 +171,7 @@ void ReaderScreen::render() {
   } else {
     --pagesUntilFull;
   }
+  LOG_DBG("RDR", "Blit page %lu/%u %lums refresh=%s", static_cast<unsigned long>(page + 1), book.pageCount(), blitMs,
+          mode == HalDisplay::HALF_REFRESH ? "half" : "fast");
   gfx.present(mode);
 }

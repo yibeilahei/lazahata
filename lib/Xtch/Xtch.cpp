@@ -38,12 +38,14 @@ bool XtchBook::ensureOpen() {
 xtch::Error XtchBook::open(const char* path) {
   close();
   if (!path || path[0] == '\0') {
+    LOG_ERR("XTCH", "Empty path");
     error = xtch::Error::FileNotFound;
     return error;
   }
   snprintf(filepath, sizeof(filepath), "%s", path);
 
   if (!Storage.openFileForRead("XTCH", filepath, file)) {
+    LOG_ERR("XTCH", "Not found %s", filepath);
     error = xtch::Error::FileNotFound;
     return error;
   }
@@ -69,6 +71,7 @@ xtch::Error XtchBook::open(const char* path) {
   xtch::PageInfo first{};
   if (!readPageTableEntry(0, first)) {
     closeFile();
+    LOG_ERR("XTCH", "Page table unreadable");
     error = xtch::Error::CorruptedHeader;
     return error;
   }
@@ -77,7 +80,8 @@ xtch::Error XtchBook::open(const char* path) {
 
   closeFile();
   opened = true;
-  LOG_INF("XTCH", "Opened %s (%u pages, %dx%d, 2-bit)", filepath, header.pageCount, defaultWidth, defaultHeight);
+  LOG_INF("XTCH", "Opened %s (%u pages, %dx%d, title='%s')", filepath, header.pageCount, defaultWidth, defaultHeight,
+          bookTitle);
   return xtch::Error::Ok;
 }
 
@@ -85,6 +89,7 @@ xtch::Error XtchBook::readHeader() {
   uint8_t raw[sizeof(xtch::Header)];
   const size_t n = static_cast<size_t>(file.read(raw, sizeof(raw)));
   if (n != sizeof(raw)) {
+    LOG_ERR("XTCH", "Short header read (%u of %u)", static_cast<unsigned>(n), static_cast<unsigned>(sizeof(raw)));
     return xtch::Error::ReadError;
   }
   memcpy(&header, raw, sizeof(header));
@@ -101,6 +106,7 @@ xtch::Error XtchBook::readHeader() {
     return xtch::Error::InvalidVersion;
   }
   if (header.pageCount == 0) {
+    LOG_ERR("XTCH", "Header pageCount is 0");
     return xtch::Error::CorruptedHeader;
   }
   return xtch::Error::Ok;
@@ -109,6 +115,7 @@ xtch::Error XtchBook::readHeader() {
 xtch::Error XtchBook::readMetadata() {
   char titleBuf[sizeof(bookTitle)] = {};
   if (!file.seek(0x38)) {
+    LOG_ERR("XTCH", "Seek title failed");
     return xtch::Error::ReadError;
   }
   file.read(titleBuf, sizeof(titleBuf) - 1);
@@ -116,6 +123,7 @@ xtch::Error XtchBook::readMetadata() {
 
   char authorBuf[sizeof(bookAuthor)] = {};
   if (!file.seek(0xB8)) {
+    LOG_ERR("XTCH", "Seek author failed");
     return xtch::Error::ReadError;
   }
   file.read(authorBuf, sizeof(authorBuf) - 1);
@@ -150,11 +158,13 @@ bool XtchBook::pageInfo(const uint32_t pageIndex, xtch::PageInfo& info) { return
 
 bool XtchBook::drawPage(Gfx& gfx, const uint32_t pageIndex) {
   if (!opened) {
+    LOG_ERR("XTCH", "drawPage but book is closed");
     error = xtch::Error::FileNotFound;
     return false;
   }
   xtch::PageInfo page{};
   if (!readPageTableEntry(pageIndex, page)) {
+    LOG_ERR("XTCH", "Page %lu out of range or unreadable", static_cast<unsigned long>(pageIndex));
     error = xtch::Error::PageOutOfRange;
     return false;
   }
@@ -165,10 +175,13 @@ bool XtchBook::drawPage(Gfx& gfx, const uint32_t pageIndex) {
     return false;
   }
   if (!ensureOpen()) {
+    LOG_ERR("XTCH", "Reopen failed for page %lu", static_cast<unsigned long>(pageIndex));
     error = xtch::Error::FileNotFound;
     return false;
   }
   if (!file.seek64(page.offset)) {
+    LOG_ERR("XTCH", "Seek page %lu offset %llu failed", static_cast<unsigned long>(pageIndex),
+            static_cast<unsigned long long>(page.offset));
     error = xtch::Error::ReadError;
     return false;
   }
@@ -176,6 +189,7 @@ bool XtchBook::drawPage(Gfx& gfx, const uint32_t pageIndex) {
   xtch::PageHeader pageHeader{};
   if (static_cast<size_t>(file.read(reinterpret_cast<uint8_t*>(&pageHeader), sizeof(pageHeader))) !=
       sizeof(pageHeader)) {
+    LOG_ERR("XTCH", "Short page header at %lu", static_cast<unsigned long>(pageIndex));
     error = xtch::Error::ReadError;
     return false;
   }
@@ -192,6 +206,8 @@ bool XtchBook::drawPage(Gfx& gfx, const uint32_t pageIndex) {
 
   const size_t colBytes = (static_cast<size_t>(pageHeader.height) + 7) / 8;
   if (colBytes > kMaxColBytes) {
+    LOG_ERR("XTCH", "Page %lu colBytes %u too large", static_cast<unsigned long>(pageIndex),
+            static_cast<unsigned>(colBytes));
     error = xtch::Error::TooLarge;
     return false;
   }
@@ -202,18 +218,22 @@ bool XtchBook::drawPage(Gfx& gfx, const uint32_t pageIndex) {
   for (uint16_t x = 0; x < pageHeader.width; ++x) {
     const size_t colIndex = static_cast<size_t>(pageHeader.width) - 1 - x;
     if (!file.seek64(dataStart + colIndex * colBytes)) {
+      LOG_ERR("XTCH", "Seek plane1 col %u page %lu failed", x, static_cast<unsigned long>(pageIndex));
       error = xtch::Error::ReadError;
       return false;
     }
     if (static_cast<size_t>(file.read(plane1, colBytes)) != colBytes) {
+      LOG_ERR("XTCH", "Read plane1 col %u page %lu failed", x, static_cast<unsigned long>(pageIndex));
       error = xtch::Error::ReadError;
       return false;
     }
     if (!file.seek64(dataStart + planeSize + colIndex * colBytes)) {
+      LOG_ERR("XTCH", "Seek plane2 col %u page %lu failed", x, static_cast<unsigned long>(pageIndex));
       error = xtch::Error::ReadError;
       return false;
     }
     if (static_cast<size_t>(file.read(plane2, colBytes)) != colBytes) {
+      LOG_ERR("XTCH", "Read plane2 col %u page %lu failed", x, static_cast<unsigned long>(pageIndex));
       error = xtch::Error::ReadError;
       return false;
     }

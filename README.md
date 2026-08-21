@@ -20,6 +20,16 @@ freeink-sdk/          display and board support
 ```
 
 Settings and per-book progress live in `/.lazahata` on the SD card.
+Boot and runtime logs append to `/lazahata.log` on the SD root (plain text).
+
+Firmware update from SD (same idea as CrossPoint):
+
+- Settings → **Update firmware** → pick a `.bin` → confirm.
+- Or copy `.pio/build/x3/firmware.bin` to the SD root as `update.bin` and boot.
+- Recovery picker: hold **up + power** at wake (CrossPoint's X3 chord). Back stays in
+  the picker.
+
+The stock X3 left+power updater is gone once this firmware is installed.
 
 ## Build
 

@@ -7,14 +7,16 @@
 #include <algorithm>
 #include <cstring>
 
+#include <Memory.h>
+
 #include "core/ActivityManager.h"
 #include "core/fontIds.h"
+#include "screens/UpdateScreen.h"
 
 namespace {
-bool hasXtchExt(const char* name) {
+bool hasExt(const char* name, const char* ext) {
   const size_t n = strlen(name);
-  constexpr char ext[] = ".xtch";
-  constexpr size_t e = sizeof(ext) - 1;
+  const size_t e = strlen(ext);
   if (n < e) {
     return false;
   }
@@ -39,7 +41,9 @@ void joinPath(char* out, size_t outSize, const char* dir, const char* name) {
 }
 }  // namespace
 
-BrowserScreen::BrowserScreen(Gfx& gfx, MappedInput& input, const char* initialPath) : Activity("Browser", gfx, input) {
+BrowserScreen::BrowserScreen(Gfx& gfx, MappedInput& input, const char* initialPath, const Mode mode,
+                             const bool lockRoot)
+    : Activity(mode == Mode::Firmware ? "Firmware" : "Browser", gfx, input), mode(mode), lockRoot(lockRoot) {
   snprintf(path, sizeof(path), "%s", initialPath && initialPath[0] ? initialPath : "/");
 }
 
@@ -61,7 +65,7 @@ void BrowserScreen::load() {
       std::string row = name;
       row += '/';
       entries.push_back(std::move(row));
-    } else if (hasXtchExt(name)) {
+    } else if (mode == Mode::Firmware ? hasExt(name, ".bin") : hasExt(name, ".xtch")) {
       entries.emplace_back(name);
     }
   }
@@ -70,6 +74,7 @@ void BrowserScreen::load() {
     index = 0;
   }
   window = 0;
+  LOG_INF("DIR", "%s (%u items)", path, static_cast<unsigned>(entries.size()));
 }
 
 void BrowserScreen::onEnter() {
@@ -80,7 +85,9 @@ void BrowserScreen::onEnter() {
 
 void BrowserScreen::goUp() {
   if (strcmp(path, "/") == 0) {
-    finish();
+    if (!lockRoot) {
+      finish();
+    }
     return;
   }
   char* slash = strrchr(path, '/');
@@ -104,12 +111,23 @@ void BrowserScreen::activate() {
     std::string dir = name.substr(0, name.size() - 1);
     joinPath(next, sizeof(next), path, dir.c_str());
     snprintf(path, sizeof(path), "%s", next);
+    LOG_DBG("DIR", "Enter %s", path);
     index = 0;
     load();
     requestUpdate();
     return;
   }
   joinPath(next, sizeof(next), path, name.c_str());
+  LOG_INF("DIR", "Open %s", next);
+  if (mode == Mode::Firmware) {
+    auto screen = makeUniqueNoThrow<UpdateScreen>(gfx, input, next);
+    if (!screen) {
+      LOG_ERR("DIR", "OOM: update");
+      return;
+    }
+    push(std::move(screen));
+    return;
+  }
   goToReader(next);
 }
 
@@ -147,7 +165,7 @@ void BrowserScreen::render() {
     window = index - rows + 1;
   }
   if (entries.empty()) {
-    gfx.drawCenteredText(FONT_UI, gfx.height() / 2, "No books");
+    gfx.drawCenteredText(FONT_UI, gfx.height() / 2, mode == Mode::Firmware ? "No .bin files" : "No books");
   } else {
     const int last = std::min(window + rows, static_cast<int>(entries.size()));
     for (int i = window; i < last; ++i) {

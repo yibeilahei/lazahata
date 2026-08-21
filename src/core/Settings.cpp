@@ -16,12 +16,15 @@ void Settings::load() {
   }
   const size_t n = static_cast<size_t>(f.read(reinterpret_cast<uint8_t*>(&loaded), sizeof(loaded)));
   if (n != sizeof(loaded) || loaded.magic != MAGIC || loaded.version != VERSION) {
-    LOG_ERR("SET", "Ignoring invalid settings file");
+    LOG_ERR("SET", "Ignoring settings file (n=%u magic=0x%08lX ver=%u, need %u/0x%08lX/%u)", static_cast<unsigned>(n),
+            static_cast<unsigned long>(loaded.magic), loaded.version, static_cast<unsigned>(sizeof(loaded)),
+            static_cast<unsigned long>(MAGIC), VERSION);
     return;
   }
   *this = loaded;
   lastBookPath[sizeof(lastBookPath) - 1] = '\0';
-  LOG_INF("SET", "Loaded settings (sleep=%u min, refresh=%u)", sleepTimeoutMinutes, refreshEveryNPages);
+  LOG_INF("SET", "Loaded sleep=%u min refresh=%u night=%u last='%s'", sleepTimeoutMinutes, refreshEveryNPages, nightMode,
+          lastBookPath);
 }
 
 void Settings::save() const {
@@ -33,8 +36,11 @@ void Settings::save() const {
   }
   const size_t n = f.write(this, sizeof(*this));
   if (n != sizeof(*this)) {
-    LOG_ERR("SET", "Short settings write");
+    LOG_ERR("SET", "Short settings write (%u of %u)", static_cast<unsigned>(n), static_cast<unsigned>(sizeof(*this)));
+    return;
   }
+  LOG_DBG("SET", "Saved sleep=%u refresh=%u night=%u last='%s'", sleepTimeoutMinutes, refreshEveryNPages, nightMode,
+          lastBookPath);
 }
 
 unsigned long Settings::sleepTimeoutMs() const {
