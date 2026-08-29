@@ -51,7 +51,6 @@ void HomeScreen::loop() {
 
 void HomeScreen::render() {
   gfx.clear(false);
-  gfx.drawCenteredText(FONT_UI_BOLD, 36, "Lazahata");
 
   char bat[16];
   snprintf(bat, sizeof(bat), "%u%%", static_cast<unsigned>(powerManager.getBatteryPercentage()));
