@@ -2,6 +2,8 @@
 
 #include <HalStorage.h>
 
+#include <vector>
+
 #include "XtchTypes.h"
 
 class Gfx;
@@ -26,7 +28,14 @@ class XtchBook {
   xtch::Error lastError() const { return error; }
 
   bool pageInfo(uint32_t pageIndex, xtch::PageInfo& info);
-  bool drawPage(Gfx& gfx, uint32_t pageIndex);
+
+  // Header flag only; getChapters() parses once and caches.
+  bool hasChapters() const { return chaptersAvailable; }
+  const std::vector<xtch::ChapterInfo>& getChapters();
+
+  // Paints a 2-bit page and runs the display sequence; caller must not present() on success.
+  // pagesUntilFullRefresh is decremented each call and reset to refreshFrequency at the periodic full refresh.
+  bool drawPage(Gfx& gfx, uint32_t pageIndex, int& pagesUntilFullRefresh, int refreshFrequency);
 
  private:
   char filepath[256]{};
@@ -38,10 +47,16 @@ class XtchBook {
   uint16_t defaultHeight = 0;
   bool opened = false;
   xtch::Error error = xtch::Error::Ok;
+  std::vector<xtch::ChapterInfo> chapters;
+  bool chaptersAvailable = false;
+  bool chaptersLoaded = false;
+  uint8_t* pageBuffer = nullptr;
+  size_t pageBufferCapacity = 0;
 
   bool ensureOpen();
   void closeFile();
   xtch::Error readHeader();
   xtch::Error readMetadata();
   bool readPageTableEntry(uint32_t pageIndex, xtch::PageInfo& info);
+  void readChapters();
 };

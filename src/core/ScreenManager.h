@@ -3,29 +3,28 @@
 #include <memory>
 #include <vector>
 
-#include "core/Activity.h"
-#include "core/MappedInput.h"
+#include "core/Screen.h"
 
 class Gfx;
 
-class ActivityManager {
+class ScreenManager {
   Gfx& gfx;
   MappedInput& input;
-  std::unique_ptr<Activity> current;
-  std::vector<std::unique_ptr<Activity>> stack;
-  std::unique_ptr<Activity> pending;
+  std::unique_ptr<Screen> current;
+  std::vector<std::unique_ptr<Screen>> stack;
+  std::unique_ptr<Screen> pending;
   enum class Pending { None, Push, Pop, Replace } pendingAction = Pending::None;
   bool dirty = false;
 
   void applyPending();
 
  public:
-  ActivityManager(Gfx& gfx, MappedInput& input) : gfx(gfx), input(input) { stack.reserve(8); }
+  ScreenManager(Gfx& gfx, MappedInput& input) : gfx(gfx), input(input) { stack.reserve(8); }
 
   void loop();
   void requestUpdate() { dirty = true; }
-  void replace(std::unique_ptr<Activity> activity);
-  void push(std::unique_ptr<Activity> activity);
+  void replace(std::unique_ptr<Screen> screen);
+  void push(std::unique_ptr<Screen> screen);
   void pop();
   void goHome();
   void goToReader(const char* path);
@@ -36,7 +35,6 @@ class ActivityManager {
 
   bool isReader() const { return current && current->isReader(); }
   bool blocksSleep() const { return current && current->blocksSleep(); }
-  Activity* currentActivity() const { return current.get(); }
 };
 
-extern ActivityManager activityManager;
+extern ScreenManager screenManager;

@@ -9,7 +9,6 @@
 #include <cstdio>
 #include <cstring>
 
-#include "core/SdLog.h"
 #include "core/fontIds.h"
 
 namespace {
@@ -46,12 +45,12 @@ void UpdateScreen::drawProgress(const size_t written, const size_t total) {
   gfx.present(HalDisplay::FAST_REFRESH);
 }
 
-UpdateScreen::UpdateScreen(Gfx& gfx, MappedInput& input, const char* path) : Activity("Update", gfx, input) {
+UpdateScreen::UpdateScreen(Gfx& gfx, MappedInput& input, const char* path) : Screen("Update", gfx, input) {
   snprintf(firmwarePath, sizeof(firmwarePath), "%s", path ? path : "");
 }
 
 void UpdateScreen::onEnter() {
-  Activity::onEnter();
+  Screen::onEnter();
   check = sdUpdate::inspect(firmwarePath);
   if (!check.ok) {
     error = check.error ? check.error : "invalid firmware";
@@ -74,7 +73,6 @@ void UpdateScreen::loop() {
     }
   } else if (state == State::Updating && !started) {
     started = true;
-    sdlog::flush();
     drawProgress(0, check.size);
     if (!sdUpdate::flash(firmwarePath, progressCb, this)) {
       error = Update.errorString();
@@ -85,7 +83,6 @@ void UpdateScreen::loop() {
       requestUpdate();
       return;
     }
-    sdlog::flush();
     gfx.clear(false);
     gfx.drawCenteredText(FONT_UI_BOLD, gfx.height() / 2, "Update complete");
     gfx.drawCenteredText(FONT_UI, gfx.height() / 2 + 28, "Restarting");

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 // XTCH on-disk layout (from CrossPoint lib/Xtc, MIT).
 // Pages are pre-rendered 2-bit bitmaps. Width and height come from the page table.
@@ -54,6 +55,15 @@ struct PageInfo {
   uint16_t height;
 };
 
+// One entry of the optional chapter table (96 bytes on disk: 80-byte name +
+// 2-byte startPage + 2-byte endPage + 12 bytes reserved), pointed to by
+// Header::chapterOffset/padding (combined as a uint64_t) when hasChapters==1.
+struct ChapterInfo {
+  std::string name;
+  uint16_t startPage;  // 0-based, inclusive
+  uint16_t endPage;    // 0-based, inclusive
+};
+
 enum class Error : uint8_t {
   Ok = 0,
   FileNotFound,
@@ -63,6 +73,7 @@ enum class Error : uint8_t {
   PageOutOfRange,
   ReadError,
   TooLarge,
+  OutOfMemory,
 };
 
 inline const char* errorName(Error err) {
@@ -83,6 +94,8 @@ inline const char* errorName(Error err) {
       return "read error";
     case Error::TooLarge:
       return "page larger than screen";
+    case Error::OutOfMemory:
+      return "out of memory";
     default:
       return "unknown";
   }

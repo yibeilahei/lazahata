@@ -3,13 +3,12 @@
 #include <Gfx.h>
 #include <HalStorage.h>
 #include <Logging.h>
+#include <Memory.h>
 
 #include <algorithm>
 #include <cstring>
 
-#include <Memory.h>
-
-#include "core/ActivityManager.h"
+#include "core/UiList.h"
 #include "core/fontIds.h"
 #include "screens/UpdateScreen.h"
 
@@ -43,7 +42,7 @@ void joinPath(char* out, size_t outSize, const char* dir, const char* name) {
 
 BrowserScreen::BrowserScreen(Gfx& gfx, MappedInput& input, const char* initialPath, const Mode mode,
                              const bool lockRoot)
-    : Activity(mode == Mode::Firmware ? "Firmware" : "Browser", gfx, input), mode(mode), lockRoot(lockRoot) {
+    : Screen(mode == Mode::Firmware ? "Firmware" : "Browser", gfx, input), mode(mode), lockRoot(lockRoot) {
   snprintf(path, sizeof(path), "%s", initialPath && initialPath[0] ? initialPath : "/");
 }
 
@@ -78,7 +77,7 @@ void BrowserScreen::load() {
 }
 
 void BrowserScreen::onEnter() {
-  Activity::onEnter();
+  Screen::onEnter();
   load();
   requestUpdate();
 }
@@ -132,21 +131,14 @@ void BrowserScreen::activate() {
 }
 
 void BrowserScreen::loop() {
-  const int count = static_cast<int>(entries.size());
   if (input.wasReleased(MappedInput::Button::Back)) {
     goUp();
     return;
   }
-  if (count == 0) {
-    return;
-  }
-  if (input.wasReleased(MappedInput::Button::Up) || input.wasReleased(MappedInput::Button::Left)) {
-    index = (index + count - 1) % count;
+  const int count = static_cast<int>(entries.size());
+  if (ui::applyDelta(index, input.consumeNavigationDelta(), count)) {
     requestUpdate();
-  } else if (input.wasReleased(MappedInput::Button::Down) || input.wasReleased(MappedInput::Button::Right)) {
-    index = (index + 1) % count;
-    requestUpdate();
-  } else if (input.wasReleased(MappedInput::Button::Confirm)) {
+  } else if (count > 0 && input.wasReleased(MappedInput::Button::Confirm)) {
     activate();
   }
 }
@@ -158,26 +150,14 @@ void BrowserScreen::render() {
   const int rowH = gfx.lineHeight(FONT_UI) + 8;
   const int top = 40;
   const int rows = (gfx.height() - top - 24) / rowH;
-  if (index < window) {
-    window = index;
-  }
-  if (index >= window + rows) {
-    window = index - rows + 1;
-  }
+  ui::followWindow(window, index, rows);
   if (entries.empty()) {
     gfx.drawCenteredText(FONT_UI, gfx.height() / 2, mode == Mode::Firmware ? "No .bin files" : "No books");
   } else {
     const int last = std::min(window + rows, static_cast<int>(entries.size()));
     for (int i = window; i < last; ++i) {
-      const int y = top + (i - window) * rowH;
-      const char* label = entries[static_cast<size_t>(i)].c_str();
-      if (i == index) {
-        gfx.fillRect(8, y - 2, gfx.width() - 16, rowH, true);
-        gfx.drawText(FONT_UI, 16, y, label, false);
-      } else {
-        gfx.drawText(FONT_UI, 16, y, label, true);
-      }
+      ui::drawRow(gfx, top + (i - window) * rowH, rowH, entries[static_cast<size_t>(i)].c_str(), i == index);
     }
   }
-  gfx.present(HalDisplay::FAST_REFRESH);
+  presentUi();
 }

@@ -3,12 +3,16 @@
 #include <Gfx.h>
 #include <HalStorage.h>
 #include <Logging.h>
+#include <Memory.h>
 
 #include <cstdio>
 #include <cstring>
 
+#include <algorithm>
+
 #include "core/Settings.h"
 #include "core/fontIds.h"
+#include "screens/ChapterSelectionScreen.h"
 
 namespace {
 uint32_t pathHash(const char* path) {
@@ -25,7 +29,7 @@ void progressPath(char* out, size_t outSize, const char* bookPath) {
 }
 }  // namespace
 
-ReaderScreen::ReaderScreen(Gfx& gfx, MappedInput& input, const char* path) : Activity("Reader", gfx, input) {
+ReaderScreen::ReaderScreen(Gfx& gfx, MappedInput& input, const char* path) : Screen("Reader", gfx, input) {
   snprintf(bookPath, sizeof(bookPath), "%s", path ? path : "");
 }
 
@@ -61,7 +65,7 @@ void ReaderScreen::saveProgress() const {
 }
 
 void ReaderScreen::onEnter() {
-  Activity::onEnter();
+  Screen::onEnter();
   pagesUntilFull = settings.refreshEveryNPages;
   if (book.open(bookPath) != xtch::Error::Ok) {
     LOG_ERR("RDR", "Failed to open %s: %s", bookPath, xtch::errorName(book.lastError()));
@@ -87,8 +91,10 @@ void ReaderScreen::onExit() {
     saveProgress();
   }
   book.close();
-  Activity::onExit();
+  Screen::onExit();
 }
+
+void ReaderScreen::onResume() { pagesUntilFull = 1; }
 
 void ReaderScreen::loop() {
   if (!loaded) {
@@ -103,25 +109,37 @@ void ReaderScreen::loop() {
     return;
   }
   if (input.wasReleased(MappedInput::Button::Confirm)) {
-    overlay = !overlay;
-    LOG_DBG("RDR", "Overlay %s", overlay ? "on" : "off");
-    requestUpdate();
+    if (book.hasChapters() && !book.getChapters().empty()) {
+      pagesUntilFull = 1;
+      auto screen = makeUniqueNoThrow<ChapterSelectionScreen>(gfx, input, *this, book.getChapters(), page);
+      if (!screen) {
+        LOG_ERR("RDR", "OOM: chapters");
+        return;
+      }
+      push(std::move(screen));
+    } else {
+      showPageIndicator = true;
+      requestUpdate();
+    }
     return;
   }
 
   bool moved = false;
-  if (input.wasReleased(MappedInput::Button::PageForward) || input.wasReleased(MappedInput::Button::Right) ||
-      input.wasReleased(MappedInput::Button::Down)) {
-    if (page + 1 < book.pageCount()) {
-      ++page;
+  const int delta = input.consumeNavigationDelta();
+
+  if (delta > 0) {
+    const uint32_t maxForward = book.pageCount() > 0 ? book.pageCount() - 1 - page : 0;
+    const uint32_t step = std::min(static_cast<uint32_t>(delta), maxForward);
+    if (step > 0) {
+      page += step;
       moved = true;
     } else {
       LOG_DBG("RDR", "Already last page");
     }
-  } else if (input.wasReleased(MappedInput::Button::PageBack) || input.wasReleased(MappedInput::Button::Left) ||
-             input.wasReleased(MappedInput::Button::Up)) {
-    if (page > 0) {
-      --page;
+  } else if (delta < 0) {
+    const uint32_t step = std::min(static_cast<uint32_t>(-delta), page);
+    if (step > 0) {
+      page -= step;
       moved = true;
     } else {
       LOG_DBG("RDR", "Already first page");
@@ -134,44 +152,48 @@ void ReaderScreen::loop() {
   }
 }
 
+void ReaderScreen::showStatus(const char* title, const char* detail) {
+  gfx.clear(false);
+  gfx.drawCenteredText(FONT_UI_BOLD, gfx.height() / 2 - 20, title);
+  if (detail && detail[0] != '\0') {
+    gfx.drawCenteredText(FONT_UI, gfx.height() / 2 + 10, detail);
+  }
+  gfx.present(HalDisplay::HALF_REFRESH);
+}
+
+void ReaderScreen::jumpToPage(const uint32_t targetPage) {
+  if (!loaded || targetPage >= book.pageCount()) {
+    return;
+  }
+  page = targetPage;
+  pagesUntilFull = 1;
+  showPageIndicator = false;
+  LOG_INF("RDR", "Jumped to page %lu/%u", static_cast<unsigned long>(page + 1), book.pageCount());
+  saveProgress();
+  requestUpdate();
+}
+
 void ReaderScreen::render() {
   if (!loaded) {
-    gfx.clear(false);
-    gfx.drawCenteredText(FONT_UI_BOLD, gfx.height() / 2 - 20, "Could not open book");
-    gfx.drawCenteredText(FONT_UI, gfx.height() / 2 + 10, xtch::errorName(book.lastError()));
-    gfx.present(HalDisplay::HALF_REFRESH);
+    showStatus("Could not open book", xtch::errorName(book.lastError()));
+    return;
+  }
+
+  if (showPageIndicator) {
+    showPageIndicator = false;
+    pagesUntilFull = 1;
+    char line[32];
+    snprintf(line, sizeof(line), "%lu / %u", static_cast<unsigned long>(page + 1), book.pageCount());
+    showStatus(book.title(), line);
     return;
   }
 
   const unsigned long blitStart = millis();
-  if (!book.drawPage(gfx, page)) {
+  if (!book.drawPage(gfx, page, pagesUntilFull, settings.refreshEveryNPages)) {
     LOG_ERR("RDR", "Blit page %lu failed: %s", static_cast<unsigned long>(page), xtch::errorName(book.lastError()));
-    gfx.clear(false);
-    gfx.drawCenteredText(FONT_UI_BOLD, gfx.height() / 2, xtch::errorName(book.lastError()));
-    gfx.present(HalDisplay::HALF_REFRESH);
+    showStatus(xtch::errorName(book.lastError()));
     return;
   }
   const unsigned long blitMs = millis() - blitStart;
-
-  if (overlay) {
-    char line[48];
-    snprintf(line, sizeof(line), "%lu / %u", static_cast<unsigned long>(page + 1), book.pageCount());
-    const int y = gfx.height() - gfx.lineHeight(FONT_UI) - 8;
-    gfx.fillRect(0, y - 4, gfx.width(), gfx.lineHeight(FONT_UI) + 12, false);
-    gfx.drawText(FONT_UI, 12, y, book.title());
-    const int w = gfx.textWidth(FONT_UI, line);
-    gfx.drawText(FONT_UI, gfx.width() - w - 12, y, line);
-  }
-
-  // FAST on page turns. HALF every N pages to clear ghosting.
-  HalDisplay::RefreshMode mode = HalDisplay::FAST_REFRESH;
-  if (pagesUntilFull <= 1) {
-    mode = HalDisplay::HALF_REFRESH;
-    pagesUntilFull = settings.refreshEveryNPages;
-  } else {
-    --pagesUntilFull;
-  }
-  LOG_DBG("RDR", "Blit page %lu/%u %lums refresh=%s", static_cast<unsigned long>(page + 1), book.pageCount(), blitMs,
-          mode == HalDisplay::HALF_REFRESH ? "half" : "fast");
-  gfx.present(mode);
+  LOG_DBG("RDR", "Blit page %lu/%u %lums", static_cast<unsigned long>(page + 1), book.pageCount(), blitMs);
 }

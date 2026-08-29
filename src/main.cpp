@@ -13,10 +13,9 @@
 #include <WiFi.h>
 #include <builtinFonts/all.h>
 
-#include "core/ActivityManager.h"
+#include "core/ScreenManager.h"
 #include "core/MappedInput.h"
 #include "core/Power.h"
-#include "core/SdLog.h"
 #include "core/SdUpdate.h"
 #include "core/Settings.h"
 #include "core/fontIds.h"
@@ -27,7 +26,7 @@
 
 Gfx gfx(display);
 MappedInput mappedInput(gpio);
-ActivityManager activityManager(gfx, mappedInput);
+ScreenManager screenManager(gfx, mappedInput);
 
 EpdFont ui12RegularFont(&ubuntu_12_medium);
 EpdFont ui12BoldFont(&ubuntu_12_bold);
@@ -49,13 +48,13 @@ static const char* wakeupName(HalGPIO::WakeupReason reason) {
 
 static void setupDisplayAndFonts() {
   display.begin();
+  MappedInput::installBusyWaitPoll();
   gfx.begin();
   gfx.insertFont(FONT_UI, &ui12Family);
   gfx.insertFont(FONT_UI_BOLD, &ui12BoldFamily);
 }
 
 void setup() {
-  sdlog::attach();
 #ifdef ENABLE_SERIAL_LOG
   logSerial.begin(115200);
 #if LOG_SERIAL_HAS_TX_TIMEOUT
@@ -79,11 +78,10 @@ void setup() {
   if (!Storage.begin()) {
     LOG_ERR("MAIN", "SD init failed");
     setupDisplayAndFonts();
-    activityManager.showMessage("SD card error");
+    screenManager.showMessage("SD card error");
     return;
   }
-  sdlog::begin();
-  LOG_INF("MAIN", "SD ready, log=%s", sdlog::kPath);
+  LOG_INF("MAIN", "SD ready");
 
   HalSystem::checkPanic();
   settings.load();
@@ -94,7 +92,6 @@ void setup() {
     case HalGPIO::WakeupReason::PowerButton:
       if (!gpio.verifyPowerButtonWakeup(800, true)) {
         LOG_INF("MAIN", "Power press too short, sleeping");
-        sdlog::flush();
         powerManager.startDeepSleep(gpio);
       } else {
         LOG_INF("MAIN", "Power wake, waiting for button release");
@@ -112,7 +109,6 @@ void setup() {
       break;
     case HalGPIO::WakeupReason::AfterUSBPower:
       LOG_INF("MAIN", "USB-power wake, sleeping");
-      sdlog::flush();
       powerManager.startDeepSleep(gpio);
       break;
     default:
@@ -124,7 +120,7 @@ void setup() {
   LOG_INF("MAIN", "Display up night=%u", settings.nightMode);
 
   if (recoveryFirmware) {
-    activityManager.goToFirmwareUpdate(true);
+    screenManager.goToFirmwareUpdate(true);
     return;
   }
 
@@ -135,10 +131,10 @@ void setup() {
   if (wakeupReason == HalGPIO::WakeupReason::PowerButton && settings.lastBookPath[0] != '\0' &&
       Storage.exists(settings.lastBookPath)) {
     LOG_INF("MAIN", "Resume %s", settings.lastBookPath);
-    activityManager.goToReader(settings.lastBookPath);
+    screenManager.goToReader(settings.lastBookPath);
   } else {
     LOG_INF("MAIN", "Go home (last='%s')", settings.lastBookPath);
-    activityManager.goHome();
+    screenManager.goHome();
   }
 }
 
@@ -151,7 +147,6 @@ void loop() {
   if (power::maybeSleep(gpio, settings)) {
     return;
   }
-  activityManager.loop();
-  sdlog::poll();
+  screenManager.loop();
   power::idleDelay();
 }

@@ -2,6 +2,8 @@
 
 #include <HalGPIO.h>
 
+#include <cstdint>
+
 class MappedInput {
  public:
   // PageBack/PageForward are the X3 page keys (up/down).
@@ -18,7 +20,23 @@ class MappedInput {
   bool wasAnyReleased() const { return gpio.wasAnyReleased(); }
   unsigned long powerHeldMs() const { return gpio.getPowerButtonHeldTime(); }
 
+  // Call once from setup() after display.begin().
+  static void installBusyWaitPoll();
+
+  void resetPendingPageTaps();
+
+  // Net list/page delta from this frame's release edges plus taps drained during a blocking refresh.
+  int consumeNavigationDelta();
+
  private:
   HalGPIO& gpio;
   uint8_t map(Button button) const;
+
+  uint16_t consumePendingForwardTaps();
+  uint16_t consumePendingBackTaps();
+
+  // Hook has no instance, so tap counters are static (one MappedInput exists).
+  static bool busyWaitPoll(int8_t busyPin, uint8_t busyLevel);
+  static uint16_t pendingForwardTaps;
+  static uint16_t pendingBackTaps;
 };

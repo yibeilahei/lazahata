@@ -1,12 +1,12 @@
 #pragma once
 
-#include "core/Activity.h"
+#include "core/Screen.h"
 
-class SettingsScreen final : public Activity {
+class SettingsScreen final : public Screen {
   int index = 0;
 
  public:
-  SettingsScreen(Gfx& gfx, MappedInput& input) : Activity("Settings", gfx, input) {}
+  SettingsScreen(Gfx& gfx, MappedInput& input) : Screen("Settings", gfx, input) {}
   void loop() override;
   void render() override;
 };

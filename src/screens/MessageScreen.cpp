@@ -6,7 +6,7 @@
 
 #include "core/fontIds.h"
 
-MessageScreen::MessageScreen(Gfx& gfx, MappedInput& input, const char* message) : Activity("Message", gfx, input) {
+MessageScreen::MessageScreen(Gfx& gfx, MappedInput& input, const char* message) : Screen("Message", gfx, input) {
   snprintf(text, sizeof(text), "%s", message ? message : "");
 }
 
@@ -19,5 +19,5 @@ void MessageScreen::loop() {
 void MessageScreen::render() {
   gfx.clear(false);
   gfx.drawCenteredText(FONT_UI_BOLD, gfx.height() / 2, text);
-  gfx.present(HalDisplay::HALF_REFRESH);
+  presentUi();
 }

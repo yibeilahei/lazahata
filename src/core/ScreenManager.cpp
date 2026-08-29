@@ -1,0 +1,149 @@
+#include "core/ScreenManager.h"
+
+#include <HalPowerManager.h>
+#include <Logging.h>
+#include <Memory.h>
+
+#include "screens/BrowserScreen.h"
+#include "screens/HomeScreen.h"
+#include "screens/MessageScreen.h"
+#include "screens/ReaderScreen.h"
+#include "screens/SettingsScreen.h"
+
+namespace {
+template <typename T, typename... Args>
+std::unique_ptr<T> makeScreen(Gfx& gfx, MappedInput& input, const char* tag, Args&&... args) {
+  auto screen = makeUniqueNoThrow<T>(gfx, input, std::forward<Args>(args)...);
+  if (!screen) {
+    LOG_ERR("SCR", "OOM: %s", tag);
+  }
+  return screen;
+}
+}  // namespace
+
+void ScreenManager::applyPending() {
+  while (pendingAction != Pending::None) {
+    input.resetPendingPageTaps();
+
+    if (pendingAction == Pending::Pop) {
+      if (current) {
+        current->onExit();
+        current.reset();
+      }
+      pendingAction = Pending::None;
+      if (stack.empty()) {
+        goHome();
+        continue;
+      }
+      current = std::move(stack.back());
+      stack.pop_back();
+      if (current) {
+        current->onResume();
+      }
+      dirty = true;
+      continue;
+    }
+
+    if (!pending) {
+      pendingAction = Pending::None;
+      continue;
+    }
+
+    if (pendingAction == Pending::Replace) {
+      if (current) {
+        current->onExit();
+        current.reset();
+      }
+      stack.clear();
+    } else if (pendingAction == Pending::Push) {
+      if (current) {
+        stack.push_back(std::move(current));
+      }
+    }
+
+    current = std::move(pending);
+    pendingAction = Pending::None;
+    if (current) {
+      current->onEnter();
+    }
+    dirty = true;
+  }
+}
+
+void ScreenManager::loop() {
+  applyPending();
+  if (current) {
+    current->loop();
+  }
+  applyPending();
+  if (dirty && current) {
+    HalPowerManager::Lock powerLock;
+    current->render();
+    dirty = false;
+  }
+}
+
+void ScreenManager::replace(std::unique_ptr<Screen> screen) {
+  pending = std::move(screen);
+  pendingAction = Pending::Replace;
+}
+
+void ScreenManager::push(std::unique_ptr<Screen> screen) {
+  pending = std::move(screen);
+  pendingAction = Pending::Push;
+}
+
+void ScreenManager::pop() { pendingAction = Pending::Pop; }
+
+void ScreenManager::goHome() {
+  LOG_INF("SCR", "Home");
+  auto home = makeScreen<HomeScreen>(gfx, input, "home");
+  if (home) {
+    replace(std::move(home));
+  }
+}
+
+void ScreenManager::goToReader(const char* path) {
+  LOG_INF("SCR", "Reader %s", path ? path : "");
+  auto reader = makeScreen<ReaderScreen>(gfx, input, "reader", path);
+  if (reader) {
+    push(std::move(reader));
+  }
+}
+
+void ScreenManager::goToBrowser() {
+  LOG_INF("SCR", "Browser");
+  auto browser = makeScreen<BrowserScreen>(gfx, input, "browser", "/");
+  if (browser) {
+    push(std::move(browser));
+  }
+}
+
+void ScreenManager::goToSettings() {
+  LOG_INF("SCR", "Settings");
+  auto settingsScreen = makeScreen<SettingsScreen>(gfx, input, "settings");
+  if (settingsScreen) {
+    push(std::move(settingsScreen));
+  }
+}
+
+void ScreenManager::goToFirmwareUpdate(const bool recovery) {
+  LOG_INF("SCR", "Firmware picker recovery=%d", recovery ? 1 : 0);
+  auto browser = makeScreen<BrowserScreen>(gfx, input, "firmware", "/", BrowserScreen::Mode::Firmware, recovery);
+  if (!browser) {
+    return;
+  }
+  if (recovery) {
+    replace(std::move(browser));
+  } else {
+    push(std::move(browser));
+  }
+}
+
+void ScreenManager::showMessage(const char* text) {
+  LOG_INF("SCR", "Message: %s", text ? text : "");
+  auto message = makeScreen<MessageScreen>(gfx, input, "message", text);
+  if (message) {
+    replace(std::move(message));
+  }
+}

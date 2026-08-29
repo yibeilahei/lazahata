@@ -1,8 +1,8 @@
 #pragma once
 
-#include "core/Activity.h"
+#include "core/Screen.h"
 
-class MessageScreen final : public Activity {
+class MessageScreen final : public Screen {
   char text[96]{};
 
  public:

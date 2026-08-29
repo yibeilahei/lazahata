@@ -8,7 +8,6 @@
 #include <esp_ota_ops.h>
 #include <esp_system.h>
 
-#include "core/SdLog.h"
 #include "core/fontIds.h"
 
 namespace {
@@ -128,14 +127,12 @@ bool sdUpdate::tryApply(Gfx& gfx) {
     show(gfx, "Bad update.bin", check.error);
     return false;
   }
-  sdlog::flush();
   show(gfx, "Updating firmware", "Keep the card in");
   if (!flash(kPath, nullptr, nullptr)) {
     show(gfx, "Update failed", Update.errorString());
     return false;
   }
   Storage.remove(kPath);
-  sdlog::flush();
   show(gfx, "Update complete", "Restarting");
   delay(500);
   esp_restart();

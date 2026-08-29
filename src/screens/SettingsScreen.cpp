@@ -6,8 +6,8 @@
 
 #include <cstdio>
 
-#include "core/ActivityManager.h"
 #include "core/Settings.h"
+#include "core/UiList.h"
 #include "core/fontIds.h"
 
 #ifndef LAZAHATA_VERSION
@@ -79,11 +79,7 @@ void SettingsScreen::loop() {
     finish();
     return;
   }
-  if (input.wasReleased(MappedInput::Button::Up) || input.wasReleased(MappedInput::Button::Left)) {
-    index = (index + kItemCount - 1) % kItemCount;
-    requestUpdate();
-  } else if (input.wasReleased(MappedInput::Button::Down) || input.wasReleased(MappedInput::Button::Right)) {
-    index = (index + 1) % kItemCount;
+  if (ui::applyDelta(index, input.consumeNavigationDelta(), kItemCount)) {
     requestUpdate();
   } else if (input.wasReleased(MappedInput::Button::Confirm)) {
     if (index == 0) {
@@ -98,7 +94,7 @@ void SettingsScreen::loop() {
       LOG_INF("SET", "Night mode %s", settings.nightMode ? "on" : "off");
     } else if (index == 3) {
       settings.save();
-      activityManager.goToFirmwareUpdate();
+      goToFirmwareUpdate();
       return;
     } else {
       settings.save();
@@ -121,15 +117,9 @@ void SettingsScreen::render() {
   const int rowH = gfx.lineHeight(FONT_UI) + 10;
   const int startY = 90;
   for (int i = 0; i < kItemCount; ++i) {
-    const int y = startY + i * rowH;
-    if (i == index) {
-      gfx.fillRect(24, y - 4, gfx.width() - 48, rowH, true);
-      gfx.drawText(FONT_UI, 40, y, labels[i], false);
-    } else {
-      gfx.drawText(FONT_UI, 40, y, labels[i], true);
-    }
+    ui::drawMenuRow(gfx, startY + i * rowH, rowH, labels[i], i == index);
   }
 
   gfx.drawCenteredText(FONT_UI, gfx.height() - 40, "Lazahata " LAZAHATA_VERSION);
-  gfx.present(HalDisplay::FAST_REFRESH);
+  presentUi();
 }

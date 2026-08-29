@@ -1,5 +1,10 @@
 #include "core/MappedInput.h"
 
+#include <HalDisplay.h>
+
+uint16_t MappedInput::pendingForwardTaps = 0;
+uint16_t MappedInput::pendingBackTaps = 0;
+
 uint8_t MappedInput::map(const Button button) const {
   switch (button) {
     case Button::Back:
@@ -27,3 +32,47 @@ uint8_t MappedInput::map(const Button button) const {
 bool MappedInput::wasPressed(const Button button) const { return gpio.wasPressed(map(button)); }
 bool MappedInput::wasReleased(const Button button) const { return gpio.wasReleased(map(button)); }
 bool MappedInput::isPressed(const Button button) const { return gpio.isPressed(map(button)); }
+
+// Catch release edges the main loop misses during a blocking refresh.
+bool MappedInput::busyWaitPoll(int8_t /*busyPin*/, uint8_t /*busyLevel*/) {
+  ::gpio.update();
+  if (::gpio.wasReleased(HalGPIO::BTN_DOWN) || ::gpio.wasReleased(HalGPIO::BTN_RIGHT)) {
+    ++pendingForwardTaps;
+  }
+  if (::gpio.wasReleased(HalGPIO::BTN_UP) || ::gpio.wasReleased(HalGPIO::BTN_LEFT)) {
+    ++pendingBackTaps;
+  }
+  return false;  // let the driver still run its normal fallback delay
+}
+
+void MappedInput::installBusyWaitPoll() { display.setBusyWaitSliceHook(&MappedInput::busyWaitPoll); }
+
+uint16_t MappedInput::consumePendingForwardTaps() {
+  const uint16_t n = pendingForwardTaps;
+  pendingForwardTaps = 0;
+  return n;
+}
+
+uint16_t MappedInput::consumePendingBackTaps() {
+  const uint16_t n = pendingBackTaps;
+  pendingBackTaps = 0;
+  return n;
+}
+
+void MappedInput::resetPendingPageTaps() {
+  pendingForwardTaps = 0;
+  pendingBackTaps = 0;
+}
+
+int MappedInput::consumeNavigationDelta() {
+  int delta = 0;
+  if (wasReleased(Button::PageForward) || wasReleased(Button::Right) || wasReleased(Button::Down)) {
+    ++delta;
+  }
+  if (wasReleased(Button::PageBack) || wasReleased(Button::Left) || wasReleased(Button::Up)) {
+    --delta;
+  }
+  delta += static_cast<int>(consumePendingForwardTaps());
+  delta -= static_cast<int>(consumePendingBackTaps());
+  return delta;
+}

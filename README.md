@@ -8,8 +8,8 @@ The panel is 792×528 landscape. UI and pages are portrait 528×792.
 
 ```
 src/main.cpp          boot + loop
-src/core/             activity stack, input, settings, power
-src/screens/          home, browser, reader, settings
+src/core/             screen stack, input, settings, power, list UI
+src/screens/          home, browser, reader, chapters, settings, update
 src/platform/         chip workarounds
 lib/hal               hardware wrappers (still CrossPoint-shaped)
 lib/Gfx               portrait framebuffer + UI text
@@ -20,7 +20,7 @@ freeink-sdk/          display and board support
 ```
 
 Settings and per-book progress live in `/.lazahata` on the SD card.
-Boot and runtime logs append to `/lazahata.log` on the SD root (plain text).
+Boot and runtime logs go to the Serial console only (no SD log file).
 
 Firmware update from SD (same idea as CrossPoint):
 

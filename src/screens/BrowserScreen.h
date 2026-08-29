@@ -3,9 +3,9 @@
 #include <string>
 #include <vector>
 
-#include "core/Activity.h"
+#include "core/Screen.h"
 
-class BrowserScreen final : public Activity {
+class BrowserScreen final : public Screen {
  public:
   enum class Mode : uint8_t { Books, Firmware };
 

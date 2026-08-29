@@ -1,9 +1,9 @@
 #pragma once
 
-#include "core/Activity.h"
+#include "core/Screen.h"
 #include "core/SdUpdate.h"
 
-class UpdateScreen final : public Activity {
+class UpdateScreen final : public Screen {
   char firmwarePath[256]{};
   sdUpdate::Check check{};
   enum class State { Confirm, Updating, Failed } state = State::Confirm;

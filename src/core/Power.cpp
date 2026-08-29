@@ -6,8 +6,7 @@
 #include <HalPowerManager.h>
 #include <Logging.h>
 
-#include "core/ActivityManager.h"
-#include "core/SdLog.h"
+#include "core/ScreenManager.h"
 #include "core/Settings.h"
 
 namespace {
@@ -43,7 +42,7 @@ void power::noteUserActivity(HalGPIO& gpio) {
 }
 
 bool power::maybeSleep(HalGPIO& gpio, const Settings& settings) {
-  if (activityManager.blocksSleep()) {
+  if (screenManager.blocksSleep()) {
     return false;
   }
   if (lastActivity == 0) {
@@ -52,7 +51,6 @@ bool power::maybeSleep(HalGPIO& gpio, const Settings& settings) {
   if (powerReleasedSinceWake && millis() >= allowSleepAt && gpio.isPressed(HalGPIO::BTN_POWER) &&
       gpio.getPowerButtonHeldTime() > 800) {
     LOG_INF("SLP", "Power hold, sleeping");
-    sdlog::flush();
     display.deepSleep();
     powerManager.startDeepSleep(gpio);
     return true;
@@ -61,7 +59,6 @@ bool power::maybeSleep(HalGPIO& gpio, const Settings& settings) {
   const unsigned long sleepMs = settings.sleepTimeoutMs();
   if (sleepMs > 0 && millis() - lastActivity >= sleepMs) {
     LOG_INF("SLP", "Idle timeout");
-    sdlog::flush();
     display.deepSleep();
     powerManager.startDeepSleep(gpio);
     return true;

@@ -7,27 +7,32 @@
 
 #include <cstdio>
 
-#include "core/ActivityManager.h"
 #include "core/Settings.h"
+#include "core/UiList.h"
 #include "core/fontIds.h"
 
-void HomeScreen::onEnter() {
-  Activity::onEnter();
+void HomeScreen::refreshMenu() {
   const bool hasContinue = settings.lastBookPath[0] != '\0' && Storage.exists(settings.lastBookPath);
   itemCount = hasContinue ? 3 : 2;
   if (index >= itemCount) {
     index = 0;
   }
-  LOG_INF("HOME", "Continue %s last='%s'", hasContinue ? "yes" : "no", settings.lastBookPath);
+}
+
+void HomeScreen::onEnter() {
+  Screen::onEnter();
+  refreshMenu();
+  LOG_INF("HOME", "Continue %s last='%s'", itemCount == 3 ? "yes" : "no", settings.lastBookPath);
   requestUpdate();
 }
 
+void HomeScreen::onResume() {
+  Screen::onResume();
+  refreshMenu();
+}
+
 void HomeScreen::loop() {
-  if (input.wasReleased(MappedInput::Button::Up) || input.wasReleased(MappedInput::Button::Left)) {
-    index = (index + itemCount - 1) % itemCount;
-    requestUpdate();
-  } else if (input.wasReleased(MappedInput::Button::Down) || input.wasReleased(MappedInput::Button::Right)) {
-    index = (index + 1) % itemCount;
+  if (ui::applyDelta(index, input.consumeNavigationDelta(), itemCount)) {
     requestUpdate();
   } else if (input.wasReleased(MappedInput::Button::Confirm)) {
     const bool hasContinue = itemCount == 3;
@@ -36,10 +41,10 @@ void HomeScreen::loop() {
       goToReader(settings.lastBookPath);
     } else if ((hasContinue && index == 1) || (!hasContinue && index == 0)) {
       LOG_DBG("HOME", "Browse");
-      activityManager.goToBrowser();
+      goToBrowser();
     } else {
       LOG_DBG("HOME", "Settings");
-      activityManager.goToSettings();
+      goToSettings();
     }
   }
 }
@@ -64,17 +69,11 @@ void HomeScreen::render() {
   const int rowH = gfx.lineHeight(FONT_UI) + 10;
   const int startY = 120;
   for (int i = 0; i < n; ++i) {
-    const int y = startY + i * rowH;
-    if (i == index) {
-      gfx.fillRect(24, y - 4, gfx.width() - 48, rowH, true);
-      gfx.drawText(FONT_UI, 40, y, labels[i], false);
-    } else {
-      gfx.drawText(FONT_UI, 40, y, labels[i], true);
-    }
+    ui::drawMenuRow(gfx, startY + i * rowH, rowH, labels[i], i == index);
   }
 
   if (hasContinue) {
     gfx.drawText(FONT_UI, 24, gfx.height() - 48, settings.lastBookPath);
   }
-  gfx.present(HalDisplay::HALF_REFRESH);
+  presentUi();
 }
