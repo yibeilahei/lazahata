@@ -196,4 +196,13 @@ void ReaderScreen::render() {
   }
   const unsigned long blitMs = millis() - blitStart;
   LOG_DBG("RDR", "Blit page %lu/%u %lums", static_cast<unsigned long>(page + 1), book.pageCount(), blitMs);
+
+  // Skip prefetch when the user already queued a skip-ahead or back-turn
+  // during the blit; loading N+1 would delay that jump by ~146 ms.
+  const int queued = input.queuedPageDelta();
+  if (queued >= 0 && queued <= 1) {
+    book.prefetchForward(page);
+  } else {
+    LOG_DBG("RDR", "Skip prefetch (queued delta %d)", queued);
+  }
 }

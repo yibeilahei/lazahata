@@ -25,6 +25,10 @@ class MappedInput {
 
   void resetPendingPageTaps();
 
+  // Taps queued during a blocking refresh (busy-wait poll). Does not consume.
+  // Positive = net forward, negative = net back.
+  int queuedPageDelta() const;
+
   // Net list/page delta from this frame's release edges plus taps drained during a blocking refresh.
   int consumeNavigationDelta();
 

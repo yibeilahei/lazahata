@@ -64,6 +64,10 @@ void MappedInput::resetPendingPageTaps() {
   pendingBackTaps = 0;
 }
 
+int MappedInput::queuedPageDelta() const {
+  return static_cast<int>(pendingForwardTaps) - static_cast<int>(pendingBackTaps);
+}
+
 int MappedInput::consumeNavigationDelta() {
   int delta = 0;
   if (wasReleased(Button::PageForward) || wasReleased(Button::Right) || wasReleased(Button::Down)) {

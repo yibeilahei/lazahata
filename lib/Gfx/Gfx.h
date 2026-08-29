@@ -37,6 +37,8 @@ class Gfx {
   void copyGrayscaleLsbBuffers();
   void copyGrayscaleMsbBuffers();
   void displayGrayBuffer();
+  void startGrayDisplay();
+  void waitGrayDisplay();
   void cleanupGrayscaleBuffers();
   bool combinesGrayscaleBase() const;
 

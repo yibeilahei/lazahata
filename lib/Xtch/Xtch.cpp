@@ -20,6 +20,7 @@ void XtchBook::close() {
   free(pageBuffer);
   pageBuffer = nullptr;
   pageBufferCapacity = 0;
+  loadedPageIndex = 0xFFFFFFFFu;
   free(pageTable);
   pageTable = nullptr;
   free(pageCluster);
@@ -211,6 +212,71 @@ bool XtchBook::readPageTableEntry(const uint32_t pageIndex, xtch::PageInfo& info
 
 bool XtchBook::pageInfo(const uint32_t pageIndex, xtch::PageInfo& info) { return readPageTableEntry(pageIndex, info); }
 
+xtch::Error XtchBook::loadPageData(const uint32_t pageIndex) {
+  loadedPageIndex = 0xFFFFFFFFu;
+  xtch::PageInfo page{};
+  if (!readPageTableEntry(pageIndex, page)) {
+    return xtch::Error::PageOutOfRange;
+  }
+  if (!ensureOpen()) {
+    return xtch::Error::FileNotFound;
+  }
+
+  const size_t colBytes = (static_cast<size_t>(page.height) + 7) / 8;
+  const size_t planeSize = colBytes * static_cast<size_t>(page.width);
+  const size_t bitmapSize = planeSize * 2;
+  const size_t totalRead = sizeof(xtch::PageHeader) + bitmapSize;
+
+  if (pageBufferCapacity < totalRead) {
+    free(pageBuffer);
+    pageBuffer = static_cast<uint8_t*>(malloc(totalRead));
+    pageBufferCapacity = pageBuffer ? totalRead : 0;
+  }
+  if (!pageBuffer) {
+    LOG_ERR("XTCH", "Failed to allocate page buffer (%lu bytes)", static_cast<unsigned long>(totalRead));
+    return xtch::Error::OutOfMemory;
+  }
+
+  const uint32_t cachedCluster = (pageCluster && pageIndex < pageTableCount) ? pageCluster[pageIndex] : 0;
+  if (cachedCluster != 0) {
+    file.setPos(page.offset, cachedCluster);
+  } else if (!file.seek64(page.offset)) {
+    LOG_ERR("XTCH", "Seek page %lu offset %llu failed", static_cast<unsigned long>(pageIndex),
+            static_cast<unsigned long long>(page.offset));
+    return xtch::Error::ReadError;
+  } else if (pageCluster && pageIndex < pageTableCount) {
+    uint64_t pos = 0;
+    uint32_t cluster = 0;
+    if (file.getPos(&pos, &cluster)) {
+      pageCluster[pageIndex] = cluster;
+    }
+  }
+
+  const size_t bytesRead = static_cast<size_t>(file.read(pageBuffer, totalRead));
+  if (bytesRead != totalRead) {
+    LOG_ERR("XTCH", "Short page read for page %lu: got %lu of %lu", static_cast<unsigned long>(pageIndex),
+            static_cast<unsigned long>(bytesRead), static_cast<unsigned long>(totalRead));
+    return xtch::Error::ReadError;
+  }
+
+  xtch::PageHeader pageHeader{};
+  memcpy(&pageHeader, pageBuffer, sizeof(pageHeader));
+  if (pageHeader.magic != xtch::XTH_MAGIC) {
+    LOG_ERR("XTCH", "Bad page magic 0x%08lX (need XTH)", static_cast<unsigned long>(pageHeader.magic));
+    return xtch::Error::InvalidMagic;
+  }
+  if (pageHeader.compression != 0 || pageHeader.dataSize != bitmapSize || pageHeader.width != page.width ||
+      pageHeader.height != page.height) {
+    LOG_ERR("XTCH", "Unsupported page %lu encoding: compression=%u dataSize=%lu expected=%lu",
+            static_cast<unsigned long>(pageIndex), pageHeader.compression,
+            static_cast<unsigned long>(pageHeader.dataSize), static_cast<unsigned long>(bitmapSize));
+    return xtch::Error::CorruptedHeader;
+  }
+
+  loadedPageIndex = pageIndex;
+  return xtch::Error::Ok;
+}
+
 // 96-byte entries at chapterOffset|padding<<32: 80-byte name, startPage, endPage, 12 reserved.
 void XtchBook::readChapters() {
   chapters.clear();
@@ -351,6 +417,7 @@ bool XtchBook::drawPage(Gfx& gfx, const uint32_t pageIndex, int& pagesUntilFullR
   }
 
   auto fail = [this](const xtch::Error err) {
+    loadedPageIndex = 0xFFFFFFFFu;
     closeFile();
     error = err;
     return false;
@@ -375,59 +442,20 @@ bool XtchBook::drawPage(Gfx& gfx, const uint32_t pageIndex, int& pagesUntilFullR
   const uint16_t pageHeight = page.height;
   const size_t colBytes = (static_cast<size_t>(pageHeight) + 7) / 8;
   const size_t planeSize = colBytes * static_cast<size_t>(pageWidth);
-  const size_t bitmapSize = planeSize * 2;
-  const size_t totalRead = sizeof(xtch::PageHeader) + bitmapSize;
+  const bool prefetched = loadedPageIndex == pageIndex && pageBuffer != nullptr;
 
-  if (pageBufferCapacity < totalRead) {
-    free(pageBuffer);
-    pageBuffer = static_cast<uint8_t*>(malloc(totalRead));
-    pageBufferCapacity = pageBuffer ? totalRead : 0;
-  }
-  if (!pageBuffer) {
-    LOG_ERR("XTCH", "Failed to allocate page buffer (%lu bytes)", static_cast<unsigned long>(totalRead));
-    return fail(xtch::Error::OutOfMemory);
-  }
-  const uint32_t cachedCluster = (pageCluster && pageIndex < pageTableCount) ? pageCluster[pageIndex] : 0;
-  if (cachedCluster != 0) {
-    file.setPos(page.offset, cachedCluster);
-  } else if (!file.seek64(page.offset)) {
-    LOG_ERR("XTCH", "Seek page %lu offset %llu failed", static_cast<unsigned long>(pageIndex),
-            static_cast<unsigned long long>(page.offset));
-    return fail(xtch::Error::ReadError);
-  } else if (pageCluster && pageIndex < pageTableCount) {
-    uint64_t pos = 0;
-    uint32_t cluster = 0;
-    if (file.getPos(&pos, &cluster)) {
-      pageCluster[pageIndex] = cluster;
+  if (!prefetched) {
+    const xtch::Error loadErr = loadPageData(pageIndex);
+    if (loadErr != xtch::Error::Ok) {
+      return fail(loadErr);
     }
-  }
-  const size_t bytesRead = static_cast<size_t>(file.read(pageBuffer, totalRead));
-  if (bytesRead != totalRead) {
-    LOG_ERR("XTCH", "Short page read for page %lu: got %lu of %lu", static_cast<unsigned long>(pageIndex),
-            static_cast<unsigned long>(bytesRead), static_cast<unsigned long>(totalRead));
-    closeFile();
-    error = xtch::Error::ReadError;
-    return false;
-  }
-
-  xtch::PageHeader pageHeader{};
-  memcpy(&pageHeader, pageBuffer, sizeof(pageHeader));
-  if (pageHeader.magic != xtch::XTH_MAGIC) {
-    LOG_ERR("XTCH", "Bad page magic 0x%08lX (need XTH)", static_cast<unsigned long>(pageHeader.magic));
-    return fail(xtch::Error::InvalidMagic);
-  }
-  if (pageHeader.compression != 0 || pageHeader.dataSize != bitmapSize || pageHeader.width != pageWidth ||
-      pageHeader.height != pageHeight) {
-    LOG_ERR("XTCH", "Unsupported page %lu encoding: compression=%u dataSize=%lu expected=%lu",
-            static_cast<unsigned long>(pageIndex), pageHeader.compression,
-            static_cast<unsigned long>(pageHeader.dataSize), static_cast<unsigned long>(bitmapSize));
-    return fail(xtch::Error::CorruptedHeader);
   }
 
   const uint32_t tLoaded = millis();
-  LOG_DBG("XTCH", "Page %lu: SD load took %lums (%lu bytes, heap=%u)", static_cast<unsigned long>(pageIndex),
-          static_cast<unsigned long>(tLoaded - tStart), static_cast<unsigned long>(bytesRead),
-          static_cast<unsigned>(ESP.getFreeHeap()));
+  const size_t bytesHeld = sizeof(xtch::PageHeader) + planeSize * 2;
+  LOG_DBG("XTCH", "Page %lu: %s took %lums (%lu bytes, heap=%u)", static_cast<unsigned long>(pageIndex),
+          prefetched ? "prefetch hit" : "SD load", static_cast<unsigned long>(tLoaded - tStart),
+          static_cast<unsigned long>(bytesHeld), static_cast<unsigned>(ESP.getFreeHeap()));
 
   const uint8_t* plane1 = pageBuffer + sizeof(xtch::PageHeader);
   const uint8_t* plane2 = plane1 + planeSize;
@@ -490,24 +518,46 @@ bool XtchBook::drawPage(Gfx& gfx, const uint32_t pageIndex, int& pagesUntilFullR
 
   const uint32_t tMsbCopied = millis();
 
+  // DRF then wait immediately. Inserting work between them (even the 5 ms Ink
+  // blit) missed the busy pulse and waitBusy sat idle-HIGH until a later
+  // ~223 ms period. SD between DRF and wait is worse: shared SPI aborts gray.
   gfx.displayGrayBuffer();
-
   const uint32_t tGrayDisplayed = millis();
 
-  // Rebuild BW baseline so the next differential update matches the panel.
   paint(PlaneOp::Ink);
+  const uint32_t tInkRebuilt = millis();
+
   gfx.cleanupGrayscaleBuffers();
+  const uint32_t tCleanup = millis();
 
   error = xtch::Error::Ok;
 
-  const uint32_t tRendered = millis();
   LOG_DBG("XTCH",
           "Rendered page %lu/%u: load=%lums pass1Decode=%lums bwDisplay=%lums lsbDecode+copy=%lums "
-          "msbDecode+copy=%lums grayDisplay=%lums pass4+cleanup=%lums total=%lums",
+          "msbDecode+copy=%lums grayDisplay=%lums inkRebuild=%lums cleanup=%lums total=%lums",
           static_cast<unsigned long>(pageIndex + 1), header.pageCount,
           static_cast<unsigned long>(tLoaded - tStart), static_cast<unsigned long>(tPass1Decoded - tLoaded),
           static_cast<unsigned long>(tBwDisplayed - tPass1Decoded), static_cast<unsigned long>(tLsbCopied - tBwDisplayed),
           static_cast<unsigned long>(tMsbCopied - tLsbCopied), static_cast<unsigned long>(tGrayDisplayed - tMsbCopied),
-          static_cast<unsigned long>(tRendered - tGrayDisplayed), static_cast<unsigned long>(tRendered - tStart));
+          static_cast<unsigned long>(tInkRebuilt - tGrayDisplayed), static_cast<unsigned long>(tCleanup - tInkRebuilt),
+          static_cast<unsigned long>(tCleanup - tStart));
   return true;
+}
+
+void XtchBook::prefetchForward(const uint32_t fromPageIndex) {
+  if (!opened || fromPageIndex + 1 >= header.pageCount) {
+    return;
+  }
+  if (loadedPageIndex == fromPageIndex + 1 && pageBuffer != nullptr) {
+    return;
+  }
+  const uint32_t t0 = millis();
+  const xtch::Error err = loadPageData(fromPageIndex + 1);
+  if (err != xtch::Error::Ok) {
+    LOG_DBG("XTCH", "Prefetch page %lu failed: %s", static_cast<unsigned long>(fromPageIndex + 1),
+            xtch::errorName(err));
+    return;
+  }
+  LOG_DBG("XTCH", "Prefetch page %lu %lums", static_cast<unsigned long>(fromPageIndex + 2),
+          static_cast<unsigned long>(millis() - t0));
 }

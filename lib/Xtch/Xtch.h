@@ -37,6 +37,10 @@ class XtchBook {
   // pagesUntilFullRefresh is decremented each call and reset to refreshFrequency at the periodic full refresh.
   bool drawPage(Gfx& gfx, uint32_t pageIndex, int& pagesUntilFullRefresh, int refreshFrequency);
 
+  // Best-effort load of fromPageIndex+1 into pageBuffer. No-op if already loaded
+  // or past the end. Call after drawPage when the next turn is likely +1.
+  void prefetchForward(uint32_t fromPageIndex);
+
  private:
   char filepath[256]{};
   char bookTitle[128]{};
@@ -52,6 +56,7 @@ class XtchBook {
   bool chaptersLoaded = false;
   uint8_t* pageBuffer = nullptr;
   size_t pageBufferCapacity = 0;
+  uint32_t loadedPageIndex = 0xFFFFFFFFu;
   xtch::PageTableEntry* pageTable = nullptr;
   uint32_t* pageCluster = nullptr;
   uint16_t pageTableCount = 0;
@@ -62,5 +67,6 @@ class XtchBook {
   xtch::Error readMetadata();
   bool loadPageTable();
   bool readPageTableEntry(uint32_t pageIndex, xtch::PageInfo& info);
+  xtch::Error loadPageData(uint32_t pageIndex);
   void readChapters();
 };
