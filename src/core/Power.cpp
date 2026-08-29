@@ -23,6 +23,8 @@ void power::noteWakeHold() {
   LOG_DBG("SLP", "Wake hold, sleep allowed in 2s");
 }
 
+bool power::isWakeReleasePending() { return wakePowerReleasePending; }
+
 bool power::consumeWakeRelease(HalGPIO& gpio) {
   if (wakePowerReleasePending && !gpio.isPressed(HalGPIO::BTN_POWER)) {
     wakePowerReleasePending = false;

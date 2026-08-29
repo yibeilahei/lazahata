@@ -31,6 +31,9 @@ class MappedInput {
 
   // Net list/page delta from this frame's release edges plus taps drained during a blocking refresh.
   int consumeNavigationDelta();
+  // Reader paging: both side buttons (X3 left=Up, right=Down) and a short power
+  // press go forward. Front Left is still back. Hold-to-sleep is unchanged.
+  int consumeReaderPageDelta();
 
  private:
   HalGPIO& gpio;

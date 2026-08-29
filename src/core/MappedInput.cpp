@@ -2,6 +2,12 @@
 
 #include <HalDisplay.h>
 
+#include "core/Power.h"
+
+namespace {
+constexpr unsigned long kShortPowerMs = 800;
+}  // namespace
+
 uint16_t MappedInput::pendingForwardTaps = 0;
 uint16_t MappedInput::pendingBackTaps = 0;
 
@@ -36,11 +42,16 @@ bool MappedInput::isPressed(const Button button) const { return gpio.isPressed(m
 // Catch release edges the main loop misses during a blocking refresh.
 bool MappedInput::busyWaitPoll(int8_t /*busyPin*/, uint8_t /*busyLevel*/) {
   ::gpio.update();
-  if (::gpio.wasReleased(HalGPIO::BTN_DOWN) || ::gpio.wasReleased(HalGPIO::BTN_RIGHT)) {
+  if (::gpio.wasReleased(HalGPIO::BTN_DOWN) || ::gpio.wasReleased(HalGPIO::BTN_RIGHT) ||
+      ::gpio.wasReleased(HalGPIO::BTN_UP)) {
     ++pendingForwardTaps;
   }
-  if (::gpio.wasReleased(HalGPIO::BTN_UP) || ::gpio.wasReleased(HalGPIO::BTN_LEFT)) {
+  if (::gpio.wasReleased(HalGPIO::BTN_LEFT)) {
     ++pendingBackTaps;
+  }
+  if (::gpio.wasReleased(HalGPIO::BTN_POWER) && !power::isWakeReleasePending() &&
+      ::gpio.getPowerButtonHeldTime() <= kShortPowerMs) {
+    ++pendingForwardTaps;
   }
   return false;  // let the driver still run its normal fallback delay
 }
@@ -75,6 +86,23 @@ int MappedInput::consumeNavigationDelta() {
   }
   if (wasReleased(Button::PageBack) || wasReleased(Button::Left) || wasReleased(Button::Up)) {
     --delta;
+  }
+  delta += static_cast<int>(consumePendingForwardTaps());
+  delta -= static_cast<int>(consumePendingBackTaps());
+  return delta;
+}
+
+int MappedInput::consumeReaderPageDelta() {
+  int delta = 0;
+  if (wasReleased(Button::PageForward) || wasReleased(Button::Right) || wasReleased(Button::Down) ||
+      wasReleased(Button::Up)) {
+    ++delta;
+  }
+  if (wasReleased(Button::Left)) {
+    --delta;
+  }
+  if (wasReleased(Button::Power) && !power::isWakeReleasePending() && powerHeldMs() <= kShortPowerMs) {
+    ++delta;
   }
   delta += static_cast<int>(consumePendingForwardTaps());
   delta -= static_cast<int>(consumePendingBackTaps());

@@ -7,6 +7,7 @@ struct Settings;
 // not by individual screens.
 namespace power {
 void noteWakeHold();
+bool isWakeReleasePending();
 bool consumeWakeRelease(HalGPIO& gpio);
 void noteUserActivity(HalGPIO& gpio);
 bool maybeSleep(HalGPIO& gpio, const Settings& settings);

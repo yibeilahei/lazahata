@@ -125,7 +125,7 @@ void ReaderScreen::loop() {
   }
 
   bool moved = false;
-  const int delta = input.consumeNavigationDelta();
+  const int delta = input.consumeReaderPageDelta();
 
   if (delta > 0) {
     const uint32_t maxForward = book.pageCount() > 0 ? book.pageCount() - 1 - page : 0;
