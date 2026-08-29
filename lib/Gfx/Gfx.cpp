@@ -174,10 +174,6 @@ void Gfx::copyGrayscaleMsbBuffers() { panel.copyGrayscaleMsbBuffers(fb); }
 
 void Gfx::displayGrayBuffer() { panel.displayGrayBuffer(); }
 
-void Gfx::startGrayDisplay() { panel.displayGrayBufferStart(); }
-
-void Gfx::waitGrayDisplay() { panel.waitGrayDisplay(); }
-
 void Gfx::cleanupGrayscaleBuffers() { panel.cleanupGrayscaleBuffers(fb); }
 
 bool Gfx::combinesGrayscaleBase() const { return panel.combinesGrayscaleBase(); }
