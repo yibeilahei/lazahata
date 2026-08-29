@@ -79,6 +79,10 @@ class HalFile : public Print {
   uint64_t fileSize64();
   bool seek(size_t pos);
   bool seek64(uint64_t pos);
+  // Walks the FAT once; if the file is one extent, later seekSet is O(1) in both directions.
+  bool probeContiguous();
+  bool getPos(uint64_t* position, uint32_t* cluster);
+  void setPos(uint64_t position, uint32_t cluster);
   bool seekCur(int64_t offset);
   bool seekSet(size_t offset);
   int available() const;

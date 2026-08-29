@@ -151,6 +151,30 @@ size_t HalFile::fileSize() { HAL_FILE_FORWARD_CALL(fileSize, ); }      // alread
 uint64_t HalFile::fileSize64() { HAL_FILE_FORWARD_CALL(fileSize, ); }  // already thread-safe, no need to wrap
 bool HalFile::seek(size_t pos) { HAL_FILE_WRAPPED_CALL(seekSet, pos); }
 bool HalFile::seek64(uint64_t pos) { HAL_FILE_WRAPPED_CALL(seekSet, pos); }
+bool HalFile::probeContiguous() {
+  HalStorage::StorageLock lock;
+  assert(impl != nullptr);
+  uint32_t bgn = 0;
+  uint32_t end = 0;
+  return impl->file.contiguousRange(&bgn, &end);
+}
+bool HalFile::getPos(uint64_t* position, uint32_t* cluster) {
+  HalStorage::StorageLock lock;
+  assert(impl != nullptr && position && cluster);
+  fspos_t pos{};
+  impl->file.fgetpos(&pos);
+  *position = pos.position;
+  *cluster = pos.cluster;
+  return pos.cluster != 0;
+}
+void HalFile::setPos(const uint64_t position, const uint32_t cluster) {
+  HalStorage::StorageLock lock;
+  assert(impl != nullptr);
+  fspos_t pos;
+  pos.position = position;
+  pos.cluster = cluster;
+  impl->file.fsetpos(&pos);
+}
 bool HalFile::seekCur(int64_t offset) { HAL_FILE_WRAPPED_CALL(seekCur, offset); }
 bool HalFile::seekSet(size_t offset) { HAL_FILE_WRAPPED_CALL(seekSet, offset); }
 int HalFile::available() const { HAL_FILE_WRAPPED_CALL(available, ); }

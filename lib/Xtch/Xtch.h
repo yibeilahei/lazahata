@@ -8,8 +8,8 @@
 
 class Gfx;
 
-// Streaming XTCH reader. The source file is closed between reads so SdFat
-// buffers are not held during a blit.
+// Streaming XTCH reader. The source file stays open while the book is open so
+// page turns do not re-walk FAT; close() releases it.
 class XtchBook {
  public:
   XtchBook() = default;
@@ -52,11 +52,15 @@ class XtchBook {
   bool chaptersLoaded = false;
   uint8_t* pageBuffer = nullptr;
   size_t pageBufferCapacity = 0;
+  xtch::PageTableEntry* pageTable = nullptr;
+  uint32_t* pageCluster = nullptr;
+  uint16_t pageTableCount = 0;
 
   bool ensureOpen();
   void closeFile();
   xtch::Error readHeader();
   xtch::Error readMetadata();
+  bool loadPageTable();
   bool readPageTableEntry(uint32_t pageIndex, xtch::PageInfo& info);
   void readChapters();
 };

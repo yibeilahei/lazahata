@@ -12,6 +12,7 @@ class Gfx {
 
   int width() const { return logicalWidth; }
   int height() const { return logicalHeight; }
+  uint16_t stride() const { return panelWidthBytes; }
 
   void insertFont(int id, const EpdFontFamily* family);
   const EpdFontFamily* font(int id) const;
