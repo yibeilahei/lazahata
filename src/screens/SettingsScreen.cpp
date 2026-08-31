@@ -36,6 +36,10 @@ const char* refreshLabel() {
       return "Refresh: every page";
     case 10:
       return "Refresh: every 10 pages";
+    case 15:
+      return "Refresh: every 15 pages";
+    case 20:
+      return "Refresh: every 20 pages";
     default:
       return "Refresh: every 5 pages";
   }
@@ -65,6 +69,12 @@ void bumpRefresh() {
       break;
     case 5:
       settings.refreshEveryNPages = 10;
+      break;
+    case 10:
+      settings.refreshEveryNPages = 15;
+      break;
+    case 15:
+      settings.refreshEveryNPages = 20;
       break;
     default:
       settings.refreshEveryNPages = 1;
