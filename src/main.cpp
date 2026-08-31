@@ -16,7 +16,6 @@
 #include "core/ScreenManager.h"
 #include "core/MappedInput.h"
 #include "core/Power.h"
-#include "core/SdUpdate.h"
 #include "core/Settings.h"
 #include "core/fontIds.h"
 
@@ -121,10 +120,6 @@ void setup() {
 
   if (recoveryFirmware) {
     screenManager.goToFirmwareUpdate(true);
-    return;
-  }
-
-  if (sdUpdate::tryApply(gfx)) {
     return;
   }
 

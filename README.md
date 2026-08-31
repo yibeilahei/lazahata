@@ -25,7 +25,6 @@ Boot and runtime logs go to the Serial console only (no SD log file).
 Firmware update from SD (same idea as CrossPoint):
 
 - Settings → **Update firmware** → pick a `.bin` → confirm.
-- Or copy `.pio/build/x3/firmware.bin` to the SD root as `update.bin` and boot.
 - Recovery picker: hold **up + power** at wake (CrossPoint's X3 chord). Back stays in
   the picker.
 

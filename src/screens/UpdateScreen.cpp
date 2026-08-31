@@ -1,9 +1,9 @@
 #include "UpdateScreen.h"
 
+#include <Arduino.h>
 #include <Gfx.h>
 #include <HalDisplay.h>
 #include <Logging.h>
-#include <Update.h>
 #include <esp_system.h>
 
 #include <cstdio>
@@ -16,34 +16,7 @@ const char* fileName(const char* path) {
   const char* slash = strrchr(path, '/');
   return slash ? slash + 1 : path;
 }
-
-void progressCb(size_t written, size_t total, void* ctx) {
-  static_cast<UpdateScreen*>(ctx)->drawProgress(written, total);
-}
 }  // namespace
-
-void UpdateScreen::drawProgress(const size_t written, const size_t total) {
-  const int pct = total > 0 ? static_cast<int>((written * 100) / total) : 0;
-  if (pct / 5 == lastPercent / 5 && pct != 100 && lastPercent >= 0) {
-    return;
-  }
-  lastPercent = pct;
-  gfx.clear(false);
-  gfx.drawCenteredText(FONT_UI_BOLD, gfx.height() / 2 - 40, "Updating firmware");
-  char line[16];
-  snprintf(line, sizeof(line), "%d%%", pct);
-  gfx.drawCenteredText(FONT_UI, gfx.height() / 2 - 8, line);
-  const int barX = 24;
-  const int barW = gfx.width() - 48;
-  const int barY = gfx.height() / 2 + 20;
-  gfx.fillRect(barX, barY, barW, 18, true);
-  const int fill = (barW - 4) * pct / 100;
-  if (fill > 0) {
-    gfx.fillRect(barX + 2, barY + 2, fill, 14, false);
-  }
-  gfx.drawCenteredText(FONT_UI, gfx.height() / 2 + 52, "Do not power off");
-  gfx.present(HalDisplay::FAST_REFRESH);
-}
 
 UpdateScreen::UpdateScreen(Gfx& gfx, MappedInput& input, const char* path) : Screen("Update", gfx, input) {
   snprintf(firmwarePath, sizeof(firmwarePath), "%s", path ? path : "");
@@ -73,9 +46,12 @@ void UpdateScreen::loop() {
     }
   } else if (state == State::Updating && !started) {
     started = true;
-    drawProgress(0, check.size);
-    if (!sdUpdate::flash(firmwarePath, progressCb, this)) {
-      error = Update.errorString();
+    gfx.clear(false);
+    gfx.drawCenteredText(FONT_UI_BOLD, gfx.height() / 2 - 16, "Updating firmware");
+    gfx.drawCenteredText(FONT_UI, gfx.height() / 2 + 16, "Do not power off");
+    gfx.present(HalDisplay::HALF_REFRESH);
+    if (!sdUpdate::flash(firmwarePath)) {
+      error = sdUpdate::lastError();
       if (!error || error[0] == '\0') {
         error = "write failed";
       }
