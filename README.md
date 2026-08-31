@@ -1,4 +1,4 @@
-# Lazahata
+# lazahata
 
 XTCH reader for the Xteink X3. Books are `.xtch` files on the SD card: pre-rendered 2-bit page bitmaps. This firmware blits them. It does not lay out text, scale pages, or read `.xtc`.
 

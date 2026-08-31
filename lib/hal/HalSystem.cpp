@@ -137,7 +137,7 @@ std::string getPanicInfo(bool full) {
   } else {
     std::string info;
 
-    info += "Lazahata version: " LAZAHATA_VERSION;
+    info += "lazahata version: " LAZAHATA_VERSION;
     info += "\n\nPanic reason: " + std::string(panicMessage);
     info += "\n\nLast logs:\n" + getLastLogs();
     info += "\n\nStack memory:\n";

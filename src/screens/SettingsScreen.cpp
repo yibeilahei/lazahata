@@ -130,6 +130,6 @@ void SettingsScreen::render() {
     ui::drawMenuRow(gfx, startY + i * rowH, rowH, labels[i], i == index);
   }
 
-  gfx.drawCenteredText(FONT_UI, gfx.height() - 40, "Lazahata " LAZAHATA_VERSION);
+  gfx.drawCenteredText(FONT_UI, gfx.height() - 40, "lazahata " LAZAHATA_VERSION);
   presentUi();
 }
