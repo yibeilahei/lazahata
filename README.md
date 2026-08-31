@@ -1,8 +1,13 @@
 # lazahata
 
-XTCH reader for the Xteink X3. Books are `.xtch` files on the SD card: pre-rendered 2-bit page bitmaps. This firmware blits them. It does not lay out text, scale pages, or read `.xtc`.
+XTCH reader for the Xteink X3 and X4. Books are `.xtch` files on the SD card: pre-rendered 2-bit page bitmaps. This firmware blits them. It does not lay out text, scale pages, or read `.xtc`.
 
-The panel is 792×528 landscape. UI and pages are portrait 528×792.
+One firmware binary per device. Pages are rendered for that panel:
+
+| Device | Panel (landscape) | UI / pages (portrait) |
+| ------ | ----------------- | --------------------- |
+| X3     | 792×528           | 528×792               |
+| X4     | 800×480           | 480×800               |
 
 ## Layout
 
@@ -25,22 +30,20 @@ Boot and runtime logs go to the Serial console only (no SD log file).
 Firmware update from SD (same idea as CrossPoint):
 
 - Settings → **Update firmware** → pick a `.bin` → confirm.
-- Recovery picker: hold **up + power** at wake (CrossPoint's X3 chord). Back stays in
-  the picker.
+- Recovery picker: hold **up + power** at wake. Back stays in the picker.
 
-The stock X3 left+power updater is gone once this firmware is installed.
+Flash the matching env's `.bin` (X3 firmware on an X4, or the reverse, will not drive the panel). The stock Xteink updater is gone once this firmware is installed.
 
 ## Build
 
-One firmware binary per device. Default env is `x3`.
+Default env is `x3`. Separate binary per device — do not combine them.
 
 ```bash
 pio run              # env:x3
-pio run -t upload
+pio run -e x4
+pio run -e x3 -t upload
 pio device monitor
 ```
-
-Later devices get their own env (`pio run -e x4`, …), not a combined binary.
 
 Optional `platformio.local.ini` for a local upload port (gitignored).
 

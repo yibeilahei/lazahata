@@ -51,14 +51,15 @@ void HalGPIO::begin() {
 #error "Build one device per firmware env (e.g. -DFREEINK_DEVICE_X3=1)."
 #endif
 
-#if FREEINK_DEVICE_X3
-  // X3 production batches are UC8253 or UC8279 on the same glass. Probe before
-  // SPI owns the display pins and switch the sibling profile if needed.
+  // Per-batch panel: X3 UC8253/UC8279, X4 SSD1677/UC8179. Probe before SPI
+  // owns the display pins. X3's facade keys off the sibling board profile.
   freeink::applyXteinkDisplayController();
+#if FREEINK_DEVICE_X3
   if (BoardConfig::ACTIVE.displayController == BoardConfig::DisplayController::UC8279) {
     BoardConfig::selectDevice(BoardConfig::Board::XteinkX3Uc8279);
   }
 #endif
+
 
   SPI.begin(EPD_SCLK, SPI_MISO, EPD_MOSI, EPD_CS);
 

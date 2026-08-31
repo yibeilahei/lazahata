@@ -71,7 +71,7 @@ void setup() {
 
   const auto wakeupReason = gpio.getWakeupReason();
   LOG_INF("MAIN", "lazahata " LAZAHATA_VERSION " board=%s gpio=%s wake=%s bat=%u%% panic=%d",
-          BoardConfig::ACTIVE.name, gpio.deviceIsX3() ? "x3" : "not-x3", wakeupName(wakeupReason),
+          BoardConfig::ACTIVE.name, gpio.deviceIsX3() ? "x3" : "x4", wakeupName(wakeupReason),
           static_cast<unsigned>(powerManager.getBatteryPercentage()), HalSystem::isRebootFromPanic() ? 1 : 0);
 
   if (!Storage.begin()) {

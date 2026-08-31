@@ -378,8 +378,8 @@ const std::vector<xtch::ChapterInfo>& XtchBook::getChapters() {
 namespace {
 enum class PlaneOp : uint8_t { Ink, Lsb, Msb };
 
-// Full-frame X3 pages are 528×792 logical = 792×528 panel. XTCH columns are
-// stored in the same order as panel rows after the 90° map, so each source
+// Full-frame pages match logical size (X3 528×792, X4 480×800). XTCH columns
+// are stored in the same order as panel rows after the 90° map, so each source
 // byte is already one framebuffer byte.
 void blitFullFrame(uint8_t* fb, const uint8_t* plane1, const uint8_t* plane2, const size_t colBytes,
                    const uint16_t rows, const PlaneOp op) {

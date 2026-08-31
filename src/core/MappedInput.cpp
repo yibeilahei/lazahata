@@ -42,11 +42,12 @@ bool MappedInput::isPressed(const Button button) const { return gpio.isPressed(m
 // Catch release edges the main loop misses during a blocking refresh.
 bool MappedInput::busyWaitPoll(int8_t /*busyPin*/, uint8_t /*busyLevel*/) {
   ::gpio.update();
+  const bool edgeSides = ::gpio.hasEdgeSideButtons();
   if (::gpio.wasReleased(HalGPIO::BTN_DOWN) || ::gpio.wasReleased(HalGPIO::BTN_RIGHT) ||
-      ::gpio.wasReleased(HalGPIO::BTN_UP)) {
+      (edgeSides && ::gpio.wasReleased(HalGPIO::BTN_UP))) {
     ++pendingForwardTaps;
   }
-  if (::gpio.wasReleased(HalGPIO::BTN_LEFT)) {
+  if (::gpio.wasReleased(HalGPIO::BTN_LEFT) || (!edgeSides && ::gpio.wasReleased(HalGPIO::BTN_UP))) {
     ++pendingBackTaps;
   }
   if (::gpio.wasReleased(HalGPIO::BTN_POWER) && !power::isWakeReleasePending() &&
@@ -94,11 +95,12 @@ int MappedInput::consumeNavigationDelta() {
 
 int MappedInput::consumeReaderPageDelta() {
   int delta = 0;
+  const bool edgeSides = gpio.hasEdgeSideButtons();
   if (wasReleased(Button::PageForward) || wasReleased(Button::Right) || wasReleased(Button::Down) ||
-      wasReleased(Button::Up)) {
+      (edgeSides && wasReleased(Button::Up))) {
     ++delta;
   }
-  if (wasReleased(Button::Left)) {
+  if (wasReleased(Button::Left) || (!edgeSides && wasReleased(Button::Up))) {
     --delta;
   }
   if (wasReleased(Button::Power) && !power::isWakeReleasePending() && powerHeldMs() <= kShortPowerMs) {
