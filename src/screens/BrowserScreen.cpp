@@ -40,9 +40,8 @@ void joinPath(char* out, size_t outSize, const char* dir, const char* name) {
 }
 }  // namespace
 
-BrowserScreen::BrowserScreen(Gfx& gfx, MappedInput& input, const char* initialPath, const Mode mode,
-                             const bool lockRoot)
-    : Screen(mode == Mode::Firmware ? "Firmware" : "Browser", gfx, input), mode(mode), lockRoot(lockRoot) {
+BrowserScreen::BrowserScreen(Gfx& gfx, MappedInput& input, const char* initialPath, const Mode mode)
+    : Screen(mode == Mode::Firmware ? "Firmware" : "Browser", gfx, input), mode(mode) {
   snprintf(path, sizeof(path), "%s", initialPath && initialPath[0] ? initialPath : "/");
 }
 
@@ -84,9 +83,7 @@ void BrowserScreen::onEnter() {
 
 void BrowserScreen::goUp() {
   if (strcmp(path, "/") == 0) {
-    if (!lockRoot) {
-      finish();
-    }
+    finish();
     return;
   }
   char* slash = strrchr(path, '/');
@@ -149,7 +146,8 @@ void BrowserScreen::render() {
 
   const int rowH = gfx.lineHeight(FONT_UI) + 8;
   const int top = 40;
-  const int rows = (gfx.height() - top - 24) / rowH;
+  const int bottomPad = mode == Mode::Firmware ? 52 : 24;
+  const int rows = (gfx.height() - top - bottomPad) / rowH;
   ui::followWindow(window, index, rows);
   if (entries.empty()) {
     gfx.drawCenteredText(FONT_UI, gfx.height() / 2, mode == Mode::Firmware ? "No .bin files" : "No books");
@@ -158,6 +156,9 @@ void BrowserScreen::render() {
     for (int i = window; i < last; ++i) {
       ui::drawRow(gfx, top + (i - window) * rowH, rowH, entries[static_cast<size_t>(i)].c_str(), i == index);
     }
+  }
+  if (mode == Mode::Firmware) {
+    gfx.drawCenteredText(FONT_UI, gfx.height() - 28, "Back to cancel");
   }
   presentUi();
 }

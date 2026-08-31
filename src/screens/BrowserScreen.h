@@ -15,15 +15,13 @@ class BrowserScreen final : public Screen {
   int index = 0;
   int window = 0;
   Mode mode = Mode::Books;
-  bool lockRoot = false;
 
   void load();
   void activate();
   void goUp();
 
  public:
-  BrowserScreen(Gfx& gfx, MappedInput& input, const char* initialPath = "/", Mode mode = Mode::Books,
-                bool lockRoot = false);
+  BrowserScreen(Gfx& gfx, MappedInput& input, const char* initialPath = "/", Mode mode = Mode::Books);
   void onEnter() override;
   void loop() override;
   void render() override;

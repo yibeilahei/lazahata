@@ -129,7 +129,7 @@ void ScreenManager::goToSettings() {
 
 void ScreenManager::goToFirmwareUpdate(const bool recovery) {
   LOG_INF("SCR", "Firmware picker recovery=%d", recovery ? 1 : 0);
-  auto browser = makeScreen<BrowserScreen>(gfx, input, "firmware", "/", BrowserScreen::Mode::Firmware, recovery);
+  auto browser = makeScreen<BrowserScreen>(gfx, input, "firmware", "/", BrowserScreen::Mode::Firmware);
   if (!browser) {
     return;
   }

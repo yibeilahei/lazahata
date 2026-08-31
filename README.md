@@ -30,7 +30,7 @@ Boot and runtime logs go to the Serial console only (no SD log file).
 Firmware update from SD (same idea as CrossPoint):
 
 - Settings → **Update firmware** → pick a `.bin` → confirm.
-- Recovery picker: hold **up + power** at wake. Back stays in the picker.
+- Recovery picker: hold **up + power** at wake. Back returns to home.
 
 Flash the matching env's `.bin` (X3 firmware on an X4, or the reverse, will not drive the panel). The stock Xteink updater is gone once this firmware is installed.
 
