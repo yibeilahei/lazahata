@@ -7,6 +7,8 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "puff.h"
+
 XtchBook::~XtchBook() { close(); }
 
 void XtchBook::closeFile() {
@@ -20,6 +22,9 @@ void XtchBook::close() {
   free(pageBuffer);
   pageBuffer = nullptr;
   pageBufferCapacity = 0;
+  free(rawBuffer);
+  rawBuffer = nullptr;
+  rawBufferCapacity = 0;
   loadedPageIndex = 0xFFFFFFFFu;
   free(pageTable);
   pageTable = nullptr;
@@ -225,15 +230,35 @@ xtch::Error XtchBook::loadPageData(const uint32_t pageIndex) {
   const size_t colBytes = (static_cast<size_t>(page.height) + 7) / 8;
   const size_t planeSize = colBytes * static_cast<size_t>(page.width);
   const size_t bitmapSize = planeSize * 2;
-  const size_t totalRead = sizeof(xtch::PageHeader) + bitmapSize;
+  // Decoded size is always derived from width/height (never from what's on disk),
+  // so pageBuffer's layout/size is unaffected by whether the page is compressed.
+  const size_t totalDecoded = sizeof(xtch::PageHeader) + bitmapSize;
+  // page.size is the actual on-disk block length for this page (header + body);
+  // the body is raw bitplanes when uncompressed or a compressed blob otherwise.
+  const size_t totalOnDisk = page.size;
 
-  if (pageBufferCapacity < totalRead) {
+  if (totalOnDisk < sizeof(xtch::PageHeader)) {
+    LOG_ERR("XTCH", "Page %lu on-disk size %lu too small for header", static_cast<unsigned long>(pageIndex),
+            static_cast<unsigned long>(totalOnDisk));
+    return xtch::Error::CorruptedHeader;
+  }
+
+  if (pageBufferCapacity < totalDecoded) {
     free(pageBuffer);
-    pageBuffer = static_cast<uint8_t*>(malloc(totalRead));
-    pageBufferCapacity = pageBuffer ? totalRead : 0;
+    pageBuffer = static_cast<uint8_t*>(malloc(totalDecoded));
+    pageBufferCapacity = pageBuffer ? totalDecoded : 0;
   }
   if (!pageBuffer) {
-    LOG_ERR("XTCH", "Failed to allocate page buffer (%lu bytes)", static_cast<unsigned long>(totalRead));
+    LOG_ERR("XTCH", "Failed to allocate page buffer (%lu bytes)", static_cast<unsigned long>(totalDecoded));
+    return xtch::Error::OutOfMemory;
+  }
+  if (rawBufferCapacity < totalOnDisk) {
+    free(rawBuffer);
+    rawBuffer = static_cast<uint8_t*>(malloc(totalOnDisk));
+    rawBufferCapacity = rawBuffer ? totalOnDisk : 0;
+  }
+  if (!rawBuffer) {
+    LOG_ERR("XTCH", "Failed to allocate raw page buffer (%lu bytes)", static_cast<unsigned long>(totalOnDisk));
     return xtch::Error::OutOfMemory;
   }
 
@@ -252,24 +277,58 @@ xtch::Error XtchBook::loadPageData(const uint32_t pageIndex) {
     }
   }
 
-  const size_t bytesRead = static_cast<size_t>(file.read(pageBuffer, totalRead));
-  if (bytesRead != totalRead) {
+  const size_t bytesRead = static_cast<size_t>(file.read(rawBuffer, totalOnDisk));
+  if (bytesRead != totalOnDisk) {
     LOG_ERR("XTCH", "Short page read for page %lu: got %lu of %lu", static_cast<unsigned long>(pageIndex),
-            static_cast<unsigned long>(bytesRead), static_cast<unsigned long>(totalRead));
+            static_cast<unsigned long>(bytesRead), static_cast<unsigned long>(totalOnDisk));
     return xtch::Error::ReadError;
   }
 
   xtch::PageHeader pageHeader{};
-  memcpy(&pageHeader, pageBuffer, sizeof(pageHeader));
+  memcpy(&pageHeader, rawBuffer, sizeof(pageHeader));
   if (pageHeader.magic != xtch::XTH_MAGIC) {
     LOG_ERR("XTCH", "Bad page magic 0x%08lX (need XTH)", static_cast<unsigned long>(pageHeader.magic));
     return xtch::Error::InvalidMagic;
   }
-  if (pageHeader.compression != 0 || pageHeader.dataSize != bitmapSize || pageHeader.width != page.width ||
-      pageHeader.height != page.height) {
-    LOG_ERR("XTCH", "Unsupported page %lu encoding: compression=%u dataSize=%lu expected=%lu",
-            static_cast<unsigned long>(pageIndex), pageHeader.compression,
-            static_cast<unsigned long>(pageHeader.dataSize), static_cast<unsigned long>(bitmapSize));
+  if (pageHeader.width != page.width || pageHeader.height != page.height) {
+    LOG_ERR("XTCH", "Page %lu size mismatch: header=%ux%u table=%ux%u", static_cast<unsigned long>(pageIndex),
+            pageHeader.width, pageHeader.height, page.width, page.height);
+    return xtch::Error::CorruptedHeader;
+  }
+
+  const uint8_t* rawBody = rawBuffer + sizeof(xtch::PageHeader);
+  uint8_t* decodedBody = pageBuffer + sizeof(xtch::PageHeader);
+
+  if (pageHeader.compression == 0) {
+    // Raw bitplanes stored as-is: body length must match the decoded size exactly.
+    if (pageHeader.dataSize != bitmapSize || totalOnDisk != totalDecoded) {
+      LOG_ERR("XTCH", "Unsupported page %lu encoding: compression=0 dataSize=%lu expected=%lu",
+              static_cast<unsigned long>(pageIndex), static_cast<unsigned long>(pageHeader.dataSize),
+              static_cast<unsigned long>(bitmapSize));
+      return xtch::Error::CorruptedHeader;
+    }
+    memcpy(decodedBody, rawBody, bitmapSize);
+  } else if (pageHeader.compression == 1) {
+    // Raw-DEFLATE (no zlib/gzip wrapper): dataSize is the on-disk compressed body
+    // length; the decompressed length is always bitmapSize (derived from width/height).
+    if (static_cast<size_t>(pageHeader.dataSize) + sizeof(xtch::PageHeader) != totalOnDisk) {
+      LOG_ERR("XTCH", "Page %lu compressed size mismatch: dataSize=%lu on-disk=%lu",
+              static_cast<unsigned long>(pageIndex), static_cast<unsigned long>(pageHeader.dataSize),
+              static_cast<unsigned long>(totalOnDisk));
+      return xtch::Error::CorruptedHeader;
+    }
+    unsigned long destLen = static_cast<unsigned long>(bitmapSize);
+    unsigned long sourceLen = static_cast<unsigned long>(pageHeader.dataSize);
+    const int puffErr = puff(decodedBody, &destLen, rawBody, &sourceLen);
+    if (puffErr != 0 || destLen != bitmapSize) {
+      LOG_ERR("XTCH", "Page %lu decompression failed: err=%d decoded=%lu expected=%lu",
+              static_cast<unsigned long>(pageIndex), puffErr, destLen,
+              static_cast<unsigned long>(bitmapSize));
+      return xtch::Error::DecodeFailed;
+    }
+  } else {
+    LOG_ERR("XTCH", "Page %lu has unsupported compression id %u", static_cast<unsigned long>(pageIndex),
+            pageHeader.compression);
     return xtch::Error::CorruptedHeader;
   }
 

@@ -74,6 +74,7 @@ enum class Error : uint8_t {
   ReadError,
   TooLarge,
   OutOfMemory,
+  DecodeFailed,
 };
 
 inline const char* errorName(Error err) {
@@ -96,6 +97,8 @@ inline const char* errorName(Error err) {
       return "page larger than screen";
     case Error::OutOfMemory:
       return "out of memory";
+    case Error::DecodeFailed:
+      return "page decompression failed";
     default:
       return "unknown";
   }

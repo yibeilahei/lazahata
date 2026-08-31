@@ -63,8 +63,12 @@ class FileTransferServer {
   // parsing it byte-by-byte through multipart boundary matching. Path and
   // filename travel as request headers (X-File-Path/X-File-Name) since the
   // query string isn't parsed for raw-body requests. See RawUploadHandler.
+  //
+  // Non-owning: WebServer::addHandler() takes ownership and deletes every
+  // registered handler in ~WebServer(), so this must NOT also be deleted
+  // here (that previously caused a double-free/heap corruption on stop()).
   class RawUploadHandler;
-  std::unique_ptr<RawUploadHandler> uploadHandler;
+  RawUploadHandler* uploadHandler = nullptr;
   void handleUploadStart();
   void handleUploadChunk(const uint8_t* data, size_t len);
   void handleUploadEnd(size_t totalBytes);

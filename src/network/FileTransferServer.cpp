@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <new>
 
 #include "network/html/FileManagerPage.h"
 
@@ -111,12 +112,12 @@ bool FileTransferServer::begin() {
   static const char* kCollectedHeaders[] = {"Content-Length", "X-File-Path", "X-File-Name"};
   server->collectHeaders(kCollectedHeaders, 3);
 
-  uploadHandler = makeUniqueNoThrow<RawUploadHandler>(*this);
+  uploadHandler = new (std::nothrow) RawUploadHandler(*this);
   if (!uploadHandler) {
     LOG_ERR("XFER", "OOM: upload handler");
     return false;
   }
-  server->addHandler(uploadHandler.get());
+  server->addHandler(uploadHandler);
 
   server->on("/", HTTP_GET, [this]() { handleRoot(); });
   server->on("/api/status", HTTP_GET, [this]() { handleStatus(); });
@@ -151,10 +152,12 @@ void FileTransferServer::stop() {
     mdnsHostname.clear();
   }
   if (server) {
+    // ~WebServer() deletes every handler registered via addHandler(),
+    // including uploadHandler, so just drop our (non-owning) pointer.
     server->stop();
     server.reset();
   }
-  uploadHandler.reset();
+  uploadHandler = nullptr;
   running = false;
 }
 

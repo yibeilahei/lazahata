@@ -56,6 +56,11 @@ class XtchBook {
   bool chaptersLoaded = false;
   uint8_t* pageBuffer = nullptr;
   size_t pageBufferCapacity = 0;
+  // Scratch buffer for the raw on-disk page block (page header + body, which is
+  // compressed when PageHeader::compression != 0). pageBuffer always holds the
+  // decoded/decompressed form drawPage() expects.
+  uint8_t* rawBuffer = nullptr;
+  size_t rawBufferCapacity = 0;
   uint32_t loadedPageIndex = 0xFFFFFFFFu;
   xtch::PageTableEntry* pageTable = nullptr;
   uint32_t* pageCluster = nullptr;
