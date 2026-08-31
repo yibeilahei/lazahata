@@ -37,6 +37,7 @@ class Screen {
   void goToBrowser();
   void goToSettings();
   void goToFirmwareUpdate(bool recovery = false);
+  void goToWifiFileTransfer();
 
   // HALF_REFRESH on the first paint after enter/resume, FAST afterwards.
   void presentUi();

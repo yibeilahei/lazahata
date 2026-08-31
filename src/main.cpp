@@ -18,6 +18,7 @@
 #include "core/Power.h"
 #include "core/Settings.h"
 #include "core/fontIds.h"
+#include "network/WifiCredentialStore.h"
 
 #ifndef LAZAHATA_VERSION
 #define LAZAHATA_VERSION "dev"
@@ -84,6 +85,7 @@ void setup() {
 
   HalSystem::checkPanic();
   settings.load();
+  wifiCredentials.load();
   Frontlight.begin(0, 0, false);
 
   bool recoveryFirmware = false;

@@ -9,6 +9,7 @@
 #include "screens/MessageScreen.h"
 #include "screens/ReaderScreen.h"
 #include "screens/SettingsScreen.h"
+#include "screens/WifiListScreen.h"
 
 namespace {
 template <typename T, typename... Args>
@@ -137,6 +138,14 @@ void ScreenManager::goToFirmwareUpdate(const bool recovery) {
     replace(std::move(browser));
   } else {
     push(std::move(browser));
+  }
+}
+
+void ScreenManager::goToWifiFileTransfer() {
+  LOG_INF("SCR", "Wi-Fi file transfer");
+  auto wifiList = makeScreen<WifiListScreen>(gfx, input, "wifi");
+  if (wifiList) {
+    push(std::move(wifiList));
   }
 }
 

@@ -85,6 +85,12 @@ class HalFile : public Print {
   void setPos(uint64_t position, uint32_t cluster);
   bool seekCur(int64_t offset);
   bool seekSet(size_t offset);
+  // Reserves `length` bytes as one contiguous extent (skips per-cluster FAT
+  // updates during subsequent sequential writes). Only valid on a freshly
+  // created, empty file. Call truncate() afterwards to shrink back to the
+  // actual byte count if fewer bytes were written than reserved.
+  bool preAllocate(uint64_t length);
+  bool truncate(uint64_t length);
   int available() const;
   size_t position() const;
   int read(void* buf, size_t count);

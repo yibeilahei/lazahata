@@ -31,6 +31,7 @@ class ScreenManager {
   void goToBrowser();
   void goToSettings();
   void goToFirmwareUpdate(bool recovery = false);
+  void goToWifiFileTransfer();
   void showMessage(const char* text);
 
   bool isReader() const { return current && current->isReader(); }

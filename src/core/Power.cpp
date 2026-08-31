@@ -69,6 +69,15 @@ bool power::maybeSleep(HalGPIO& gpio, const Settings& settings) {
 }
 
 void power::idleDelay() {
+  // The idle power-saving delay only matters on the reader screen, where the
+  // device typically sits for long stretches between button presses. Other
+  // screens (home, settings, browser, file transfer) are short, active
+  // interactions and shouldn't be throttled — the overall sleep timeout in
+  // maybeSleep() still applies regardless.
+  if (!screenManager.isReader()) {
+    delay(1);
+    return;
+  }
   if (millis() - lastActivity >= HalPowerManager::IDLE_POWER_SAVING_MS) {
     powerManager.setPowerSaving(true);
     delay(50);

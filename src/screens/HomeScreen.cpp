@@ -13,7 +13,7 @@
 
 void HomeScreen::refreshMenu() {
   const bool hasContinue = settings.lastBookPath[0] != '\0' && Storage.exists(settings.lastBookPath);
-  itemCount = hasContinue ? 3 : 2;
+  itemCount = hasContinue ? 4 : 3;
   if (index >= itemCount) {
     index = 0;
   }
@@ -22,7 +22,7 @@ void HomeScreen::refreshMenu() {
 void HomeScreen::onEnter() {
   Screen::onEnter();
   refreshMenu();
-  LOG_INF("HOME", "Continue %s last='%s'", itemCount == 3 ? "yes" : "no", settings.lastBookPath);
+  LOG_INF("HOME", "Continue %s last='%s'", itemCount == 4 ? "yes" : "no", settings.lastBookPath);
   requestUpdate();
 }
 
@@ -35,13 +35,18 @@ void HomeScreen::loop() {
   if (ui::applyDelta(index, input.consumeNavigationDelta(), itemCount)) {
     requestUpdate();
   } else if (input.wasReleased(MappedInput::Button::Confirm)) {
-    const bool hasContinue = itemCount == 3;
+    const bool hasContinue = itemCount == 4;
+    // Item order: [Continue?], Browse, File Transfer, Settings.
+    int i = index - (hasContinue ? 1 : 0);
     if (hasContinue && index == 0) {
       LOG_DBG("HOME", "Continue");
       goToReader(settings.lastBookPath);
-    } else if ((hasContinue && index == 1) || (!hasContinue && index == 0)) {
+    } else if (i == 0) {
       LOG_DBG("HOME", "Browse");
       goToBrowser();
+    } else if (i == 1) {
+      LOG_DBG("HOME", "File Transfer");
+      goToWifiFileTransfer();
     } else {
       LOG_DBG("HOME", "Settings");
       goToSettings();
@@ -56,13 +61,14 @@ void HomeScreen::render() {
   snprintf(bat, sizeof(bat), "%u%%", static_cast<unsigned>(powerManager.getBatteryPercentage()));
   gfx.drawText(FONT_UI, gfx.width() - gfx.textWidth(FONT_UI, bat) - 12, 8, bat);
 
-  const bool hasContinue = itemCount == 3;
-  const char* labels[3];
+  const bool hasContinue = itemCount == 4;
+  const char* labels[4];
   int n = 0;
   if (hasContinue) {
     labels[n++] = "Continue";
   }
   labels[n++] = "Browse";
+  labels[n++] = "File Transfer";
   labels[n++] = "Settings";
 
   const int rowH = gfx.lineHeight(FONT_UI) + 10;
