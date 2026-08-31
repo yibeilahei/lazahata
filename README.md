@@ -45,6 +45,17 @@ pio run -e x3 -t upload
 pio device monitor
 ```
 
+## Release
+
+Bump `[lazahata] version` in `platformio.ini` to match the tag, push `develop`, then:
+
+```bash
+git tag -a v0.1.0 -m "v0.1.0"
+git push origin v0.1.0
+```
+
+GitHub Actions builds `lazahata-x3.bin` and `lazahata-x4.bin` and attaches them to a GitHub Release for that tag.
+
 Optional `platformio.local.ini` for a local upload port (gitignored).
 
 `reference/` is the CrossPoint Reader tree. Do not build it as this product.

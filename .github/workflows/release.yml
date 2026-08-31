@@ -1,0 +1,94 @@
+name: Release
+
+# Push a tag like v0.1.0 (must match [lazahata] version in platformio.ini).
+# Builds x3 and x4 and attaches lazahata-x3.bin / lazahata-x4.bin to a GitHub Release.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pio_env: x3
+            asset: lazahata-x3.bin
+          - pio_env: x4
+            asset: lazahata-x4.bin
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+          enable-cache: false
+
+      - name: Install PlatformIO Core
+        run: |
+          uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
+          # platform-espressif32's builder/main.py imports these unconditionally; its own
+          # penv bootstrap (builder/penv_setup.py) is supposed to install them automatically
+          # but isn't picking them up reliably in this runner image, so pin them explicitly.
+          uv pip install --system -U "littlefs-python>=0.16.0" "fatfs-ng>=0.1.14" "pyyaml>=6.0.2" \
+            "rich-click>=1.8.6" "zopfli>=0.2.2" "intelhex>=2.3.0" "rich>=14.0.0" "urllib3<2" \
+            "cryptography>=45.0.3" "certifi>=2025.8.3" "ecdsa>=0.19.1" "bitstring>=4.3.1" \
+            "reedsolo>=1.5.3,<1.8" "esp-idf-size>=2.0.0" "esp-coredump>=1.14.0"
+
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+          restore-keys: pio-${{ runner.os }}-
+
+      - name: Build
+        run: pio run -e ${{ matrix.pio_env }} -j1
+
+      - name: Name release asset
+        run: cp ".pio/build/${{ matrix.pio_env }}/firmware.bin" "${{ matrix.asset }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NOTES: |
+            Download the .bin for your device. Copy it to the SD card, then Settings → Update firmware (or hold Up + Power at wake).
+
+            - `lazahata-x3.bin` — Xteink X3 (528×792 pages)
+            - `lazahata-x4.bin` — Xteink X4 (480×800 pages)
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            dist/lazahata-x3.bin \
+            dist/lazahata-x4.bin \
+            --repo "${{ github.repository }}" \
+            --title "${{ github.ref_name }}" \
+            --generate-notes \
+            --notes "$NOTES"
