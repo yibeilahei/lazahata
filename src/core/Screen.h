@@ -30,7 +30,9 @@ class Screen {
   virtual bool blocksSleep() const { return false; }
 
   void requestUpdate();
-  void finish();
+  // levels > 1 pops through intermediate screens without resuming them
+  // (e.g. jump straight back to the reader, skipping a menu two levels up).
+  void finish(int levels = 1);
   void push(std::unique_ptr<Screen> screen);
   void goHome();
   void goToReader(const char* path);

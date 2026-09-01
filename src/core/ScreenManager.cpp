@@ -31,13 +31,19 @@ void ScreenManager::applyPending() {
         current->onExit();
         current.reset();
       }
-      pendingAction = Pending::None;
       if (stack.empty()) {
+        pendingAction = Pending::None;
+        pendingPopLevels = 1;
         goHome();
         continue;
       }
       current = std::move(stack.back());
       stack.pop_back();
+      if (--pendingPopLevels > 0) {
+        continue;  // more levels queued; keep popping without resuming yet
+      }
+      pendingAction = Pending::None;
+      pendingPopLevels = 1;
       if (current) {
         current->onResume();
       }
@@ -94,7 +100,10 @@ void ScreenManager::push(std::unique_ptr<Screen> screen) {
   pendingAction = Pending::Push;
 }
 
-void ScreenManager::pop() { pendingAction = Pending::Pop; }
+void ScreenManager::pop(const int levels) {
+  pendingPopLevels = levels > 1 ? levels : 1;
+  pendingAction = Pending::Pop;
+}
 
 void ScreenManager::goHome() {
   LOG_INF("SCR", "Home");

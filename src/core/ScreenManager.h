@@ -14,6 +14,7 @@ class ScreenManager {
   std::vector<std::unique_ptr<Screen>> stack;
   std::unique_ptr<Screen> pending;
   enum class Pending { None, Push, Pop, Replace } pendingAction = Pending::None;
+  int pendingPopLevels = 1;
   bool dirty = false;
 
   void applyPending();
@@ -25,7 +26,9 @@ class ScreenManager {
   void requestUpdate() { dirty = true; }
   void replace(std::unique_ptr<Screen> screen);
   void push(std::unique_ptr<Screen> screen);
-  void pop();
+  // levels > 1 skips intermediate screens (e.g. return straight to the reader
+  // from a screen pushed two levels deep) without them ever resuming.
+  void pop(int levels = 1);
   void goHome();
   void goToReader(const char* path);
   void goToBrowser();

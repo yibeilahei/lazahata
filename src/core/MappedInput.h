@@ -11,7 +11,7 @@ class MappedInput {
 
   explicit MappedInput(HalGPIO& gpio) : gpio(gpio) {}
 
-  void update() const { gpio.update(); }
+  void update();
 
   bool wasPressed(Button button) const;
   bool wasReleased(Button button) const;
@@ -42,9 +42,19 @@ class MappedInput {
 
   uint16_t consumePendingForwardTaps();
   uint16_t consumePendingBackTaps();
+  static uint16_t consumePendingConfirmTaps();
+  static uint16_t consumePendingCancelTaps();
+
+  // Latched once per update() so any screen can check Confirm/Back release any
+  // number of times this tick and get a consistent answer, including releases
+  // that happened mid-blocking-refresh and were recovered via busyWaitPoll.
+  bool confirmLatched = false;
+  bool backLatched = false;
 
   // Hook has no instance, so tap counters are static (one MappedInput exists).
   static bool busyWaitPoll(int8_t busyPin, uint8_t busyLevel);
   static uint16_t pendingForwardTaps;
   static uint16_t pendingBackTaps;
+  static uint16_t pendingConfirmTaps;
+  static uint16_t pendingCancelTaps;
 };

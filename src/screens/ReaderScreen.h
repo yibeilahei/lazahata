@@ -10,7 +10,6 @@ class ReaderScreen final : public Screen {
   uint32_t page = 0;
   int pagesUntilFull = 0;
   bool loaded = false;
-  bool showPageIndicator = false;
 
   void loadProgress();
   void saveProgress() const;

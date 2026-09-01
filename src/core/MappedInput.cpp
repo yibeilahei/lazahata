@@ -12,6 +12,8 @@ constexpr unsigned long kShortPowerMs = 800;
 
 uint16_t MappedInput::pendingForwardTaps = 0;
 uint16_t MappedInput::pendingBackTaps = 0;
+uint16_t MappedInput::pendingConfirmTaps = 0;
+uint16_t MappedInput::pendingCancelTaps = 0;
 
 uint8_t MappedInput::map(const Button button) const {
   switch (button) {
@@ -38,8 +40,18 @@ uint8_t MappedInput::map(const Button button) const {
 }
 
 bool MappedInput::wasPressed(const Button button) const { return gpio.wasPressed(map(button)); }
-bool MappedInput::wasReleased(const Button button) const { return gpio.wasReleased(map(button)); }
+bool MappedInput::wasReleased(const Button button) const {
+  if (button == Button::Confirm) return confirmLatched;
+  if (button == Button::Back) return backLatched;
+  return gpio.wasReleased(map(button));
+}
 bool MappedInput::isPressed(const Button button) const { return gpio.isPressed(map(button)); }
+
+void MappedInput::update() {
+  gpio.update();
+  confirmLatched = gpio.wasReleased(HalGPIO::BTN_CONFIRM) || consumePendingConfirmTaps() > 0;
+  backLatched = gpio.wasReleased(HalGPIO::BTN_BACK) || consumePendingCancelTaps() > 0;
+}
 
 // Catch release edges the main loop misses during a blocking refresh.
 bool MappedInput::busyWaitPoll(int8_t /*busyPin*/, uint8_t /*busyLevel*/) {
@@ -55,6 +67,12 @@ bool MappedInput::busyWaitPoll(int8_t /*busyPin*/, uint8_t /*busyLevel*/) {
   if (::gpio.wasReleased(HalGPIO::BTN_POWER) && !power::isWakeReleasePending() &&
       ::gpio.getPowerButtonHeldTime() <= kShortPowerMs) {
     ++pendingForwardTaps;
+  }
+  if (::gpio.wasReleased(HalGPIO::BTN_CONFIRM)) {
+    ++pendingConfirmTaps;
+  }
+  if (::gpio.wasReleased(HalGPIO::BTN_BACK)) {
+    ++pendingCancelTaps;
   }
   return false;  // let the driver still run its normal fallback delay
 }
@@ -73,9 +91,23 @@ uint16_t MappedInput::consumePendingBackTaps() {
   return n;
 }
 
+uint16_t MappedInput::consumePendingConfirmTaps() {
+  const uint16_t n = pendingConfirmTaps;
+  pendingConfirmTaps = 0;
+  return n;
+}
+
+uint16_t MappedInput::consumePendingCancelTaps() {
+  const uint16_t n = pendingCancelTaps;
+  pendingCancelTaps = 0;
+  return n;
+}
+
 void MappedInput::resetPendingPageTaps() {
   pendingForwardTaps = 0;
   pendingBackTaps = 0;
+  pendingConfirmTaps = 0;
+  pendingCancelTaps = 0;
 }
 
 int MappedInput::queuedPageDelta() const {

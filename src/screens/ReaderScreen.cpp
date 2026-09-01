@@ -117,18 +117,14 @@ void ReaderScreen::loop() {
     return;
   }
   if (input.wasReleased(MappedInput::Button::Confirm)) {
-    if (book.hasChapters() && !book.getChapters().empty()) {
-      pagesUntilFull = 1;
-      auto screen = makeUniqueNoThrow<ChapterSelectionScreen>(gfx, input, *this, book.getChapters(), page);
-      if (!screen) {
-        LOG_ERR("RDR", "OOM: chapters");
-        return;
-      }
-      push(std::move(screen));
-    } else {
-      showPageIndicator = true;
-      requestUpdate();
+    pagesUntilFull = 1;
+    auto screen = makeUniqueNoThrow<ChapterSelectionScreen>(gfx, input, *this, book.getChapters(), page,
+                                                            book.pageCount());
+    if (!screen) {
+      LOG_ERR("RDR", "OOM: chapters");
+      return;
     }
+    push(std::move(screen));
     return;
   }
 
@@ -175,7 +171,6 @@ void ReaderScreen::jumpToPage(const uint32_t targetPage) {
   }
   page = targetPage;
   pagesUntilFull = 1;
-  showPageIndicator = false;
   LOG_INF("RDR", "Jumped to page %lu/%u", static_cast<unsigned long>(page + 1), book.pageCount());
   saveProgress();
   requestUpdate();
@@ -184,15 +179,6 @@ void ReaderScreen::jumpToPage(const uint32_t targetPage) {
 void ReaderScreen::render() {
   if (!loaded) {
     showStatus("Could not open book", xtch::errorName(book.lastError()));
-    return;
-  }
-
-  if (showPageIndicator) {
-    showPageIndicator = false;
-    pagesUntilFull = 1;
-    char line[32];
-    snprintf(line, sizeof(line), "%lu / %u", static_cast<unsigned long>(page + 1), book.pageCount());
-    showStatus(book.title(), line);
     return;
   }
 

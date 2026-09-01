@@ -20,7 +20,7 @@ void Screen::presentUi() {
 }
 
 void Screen::requestUpdate() { screenManager.requestUpdate(); }
-void Screen::finish() { screenManager.pop(); }
+void Screen::finish(const int levels) { screenManager.pop(levels); }
 void Screen::push(std::unique_ptr<Screen> screen) { screenManager.push(std::move(screen)); }
 void Screen::goHome() { screenManager.goHome(); }
 void Screen::goToReader(const char* path) { screenManager.goToReader(path); }
