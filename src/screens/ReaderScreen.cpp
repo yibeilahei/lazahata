@@ -107,6 +107,11 @@ void ReaderScreen::loop() {
     return;
   }
 
+  // Opportunistic: finish any deferred post-page-render RAM cleanup here,
+  // before checking input, so it lands in idle time rather than the next
+  // page's blocking render.
+  book.flushPendingCleanup(gfx);
+
   if (input.wasReleased(MappedInput::Button::Back)) {
     finish();
     return;

@@ -18,6 +18,7 @@ void XtchBook::closeFile() {
 }
 
 void XtchBook::close() {
+  cleanupPending = false;
   closeFile();
   free(pageBuffer);
   pageBuffer = nullptr;
@@ -516,6 +517,10 @@ bool XtchBook::drawPage(Gfx& gfx, const uint32_t pageIndex, int& pagesUntilFullR
           prefetched ? "prefetch hit" : "SD load", static_cast<unsigned long>(tLoaded - tStart),
           static_cast<unsigned long>(bytesHeld), static_cast<unsigned>(ESP.getFreeHeap()));
 
+  // A prior page's cleanup may still be pending; the new page's own display
+  // calls need the DTM banks already resynced, so flush before touching fb.
+  flushPendingCleanup(gfx);
+
   const uint8_t* plane1 = pageBuffer + sizeof(xtch::PageHeader);
   const uint8_t* plane2 = plane1 + planeSize;
   const int ox = (gfx.width() - static_cast<int>(pageWidth)) / 2;
@@ -586,14 +591,17 @@ bool XtchBook::drawPage(Gfx& gfx, const uint32_t pageIndex, int& pagesUntilFullR
   paint(PlaneOp::Ink);
   const uint32_t tInkRebuilt = millis();
 
-  gfx.cleanupGrayscaleBuffers();
-  const uint32_t tCleanup = millis();
+  // Deferred: run on the next idle tick (flushPendingCleanup) instead of here,
+  // so its ~48ms of SPI housekeeping doesn't block the page the user is
+  // waiting on. drawPage() itself flushes it defensively before the next page.
+  cleanupPending = true;
+  const uint32_t tCleanup = tInkRebuilt;
 
   error = xtch::Error::Ok;
 
   LOG_DBG("XTCH",
           "Rendered page %lu/%u: load=%lums pass1Decode=%lums bwDisplay=%lums lsbDecode+copy=%lums "
-          "msbDecode+copy=%lums grayDisplay=%lums inkRebuild=%lums cleanup=%lums total=%lums",
+          "msbDecode+copy=%lums grayDisplay=%lums inkRebuild=%lums cleanup(deferred)=%lums total=%lums",
           static_cast<unsigned long>(pageIndex + 1), header.pageCount,
           static_cast<unsigned long>(tLoaded - tStart), static_cast<unsigned long>(tPass1Decoded - tLoaded),
           static_cast<unsigned long>(tBwDisplayed - tPass1Decoded), static_cast<unsigned long>(tLsbCopied - tBwDisplayed),
@@ -601,6 +609,14 @@ bool XtchBook::drawPage(Gfx& gfx, const uint32_t pageIndex, int& pagesUntilFullR
           static_cast<unsigned long>(tInkRebuilt - tGrayDisplayed), static_cast<unsigned long>(tCleanup - tInkRebuilt),
           static_cast<unsigned long>(tCleanup - tStart));
   return true;
+}
+
+void XtchBook::flushPendingCleanup(Gfx& gfx) {
+  if (!cleanupPending) {
+    return;
+  }
+  gfx.cleanupGrayscaleBuffers();
+  cleanupPending = false;
 }
 
 void XtchBook::prefetchForward(const uint32_t fromPageIndex) {

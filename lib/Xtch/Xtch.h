@@ -41,6 +41,12 @@ class XtchBook {
   // or past the end. Call after drawPage when the next turn is likely +1.
   void prefetchForward(uint32_t fromPageIndex);
 
+  // Runs the deferred post-gray-refresh RAM cleanup if drawPage() left one
+  // pending. No-op otherwise. Call opportunistically on idle ticks so the
+  // ~48ms SPI housekeeping happens before the user's next page turn instead
+  // of blocking the page that just rendered.
+  void flushPendingCleanup(Gfx& gfx);
+
  private:
   char filepath[256]{};
   char bookTitle[128]{};
@@ -65,6 +71,7 @@ class XtchBook {
   xtch::PageTableEntry* pageTable = nullptr;
   uint32_t* pageCluster = nullptr;
   uint16_t pageTableCount = 0;
+  bool cleanupPending = false;
 
   bool ensureOpen();
   void closeFile();
