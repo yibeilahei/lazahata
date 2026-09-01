@@ -4,6 +4,7 @@
 #include <HalDisplay.h>
 #include <HalGPIO.h>
 #include <HalPowerManager.h>
+#include <HalTiltSensor.h>
 #include <Logging.h>
 
 #include "core/ScreenManager.h"
@@ -34,7 +35,7 @@ bool power::consumeWakeRelease(HalGPIO& gpio) {
 }
 
 void power::noteUserActivity(HalGPIO& gpio) {
-  if (gpio.wasAnyPressed() || gpio.wasAnyReleased()) {
+  if (gpio.wasAnyPressed() || gpio.wasAnyReleased() || halTiltSensor.hadActivity()) {
     lastActivity = millis();
     powerManager.setPowerSaving(false);
   }
@@ -53,6 +54,7 @@ bool power::maybeSleep(HalGPIO& gpio, const Settings& settings) {
   if (powerReleasedSinceWake && millis() >= allowSleepAt && gpio.isPressed(HalGPIO::BTN_POWER) &&
       gpio.getPowerButtonHeldTime() > 800) {
     LOG_INF("SLP", "Power hold, sleeping");
+    halTiltSensor.deepSleep();
     display.deepSleep();
     powerManager.startDeepSleep(gpio);
     return true;
@@ -61,6 +63,7 @@ bool power::maybeSleep(HalGPIO& gpio, const Settings& settings) {
   const unsigned long sleepMs = settings.sleepTimeoutMs();
   if (sleepMs > 0 && millis() - lastActivity >= sleepMs) {
     LOG_INF("SLP", "Idle timeout");
+    halTiltSensor.deepSleep();
     display.deepSleep();
     powerManager.startDeepSleep(gpio);
     return true;

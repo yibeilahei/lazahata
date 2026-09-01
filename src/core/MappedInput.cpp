@@ -1,8 +1,10 @@
 #include "core/MappedInput.h"
 
 #include <HalDisplay.h>
+#include <HalTiltSensor.h>
 
 #include "core/Power.h"
+#include "core/Settings.h"
 
 namespace {
 constexpr unsigned long kShortPowerMs = 800;
@@ -104,6 +106,10 @@ int MappedInput::consumeReaderPageDelta() {
     --delta;
   }
   if (wasReleased(Button::Power) && !power::isWakeReleasePending() && powerHeldMs() <= kShortPowerMs) {
+    ++delta;
+  }
+  // Flick gesture pages forward only, regardless of flick direction.
+  if (settings.tiltPageTurn && (halTiltSensor.wasTiltedForward() || halTiltSensor.wasTiltedBack())) {
     ++delta;
   }
   delta += static_cast<int>(consumePendingForwardTaps());

@@ -4,7 +4,7 @@
 
 struct Settings {
   static constexpr uint32_t MAGIC = 0x48585443;  // "HXTC"
-  static constexpr uint16_t VERSION = 2;
+  static constexpr uint16_t VERSION = 3;
   static constexpr const char* kDir = "/.lazahata";
   static constexpr const char* kPath = "/.lazahata/settings.bin";
 
@@ -13,7 +13,7 @@ struct Settings {
   uint8_t sleepTimeoutMinutes = 5;
   uint8_t refreshEveryNPages = 5;
   uint8_t nightMode = 0;
-  uint8_t reserved = 0;
+  uint8_t tiltPageTurn = 0;  // 0 = off, 1 = on (flick either direction pages forward, X3 only)
   char lastBookPath[200]{};
 
   void load();

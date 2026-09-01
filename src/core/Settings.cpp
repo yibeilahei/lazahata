@@ -23,8 +23,8 @@ void Settings::load() {
   }
   *this = loaded;
   lastBookPath[sizeof(lastBookPath) - 1] = '\0';
-  LOG_INF("SET", "Loaded sleep=%u min refresh=%u night=%u last='%s'", sleepTimeoutMinutes, refreshEveryNPages, nightMode,
-          lastBookPath);
+  LOG_INF("SET", "Loaded sleep=%u min refresh=%u night=%u tilt=%u last='%s'", sleepTimeoutMinutes, refreshEveryNPages,
+          nightMode, tiltPageTurn, lastBookPath);
 }
 
 void Settings::save() const {
@@ -39,8 +39,8 @@ void Settings::save() const {
     LOG_ERR("SET", "Short settings write (%u of %u)", static_cast<unsigned>(n), static_cast<unsigned>(sizeof(*this)));
     return;
   }
-  LOG_DBG("SET", "Saved sleep=%u refresh=%u night=%u last='%s'", sleepTimeoutMinutes, refreshEveryNPages, nightMode,
-          lastBookPath);
+  LOG_DBG("SET", "Saved sleep=%u refresh=%u night=%u tilt=%u last='%s'", sleepTimeoutMinutes, refreshEveryNPages,
+          nightMode, tiltPageTurn, lastBookPath);
 }
 
 unsigned long Settings::sleepTimeoutMs() const {

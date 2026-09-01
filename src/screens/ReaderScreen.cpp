@@ -10,6 +10,8 @@
 
 #include <algorithm>
 
+#include <HalTiltSensor.h>
+
 #include "core/Settings.h"
 #include "core/fontIds.h"
 #include "screens/ChapterSelectionScreen.h"
@@ -91,6 +93,7 @@ void ReaderScreen::onExit() {
     saveProgress();
   }
   book.close();
+  halTiltSensor.clearPendingEvents();
   Screen::onExit();
 }
 

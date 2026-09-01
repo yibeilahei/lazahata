@@ -137,6 +137,7 @@ void setup() {
 
 void loop() {
   mappedInput.update();
+  halTiltSensor.update(settings.tiltPageTurn, CrossPointOrientation::PORTRAIT, screenManager.isReader());
   if (power::consumeWakeRelease(gpio)) {
     return;
   }

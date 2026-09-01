@@ -2,6 +2,7 @@
 
 #include <Gfx.h>
 #include <HalDisplay.h>
+#include <HalTiltSensor.h>
 #include <Logging.h>
 
 #include <cstdio>
@@ -15,7 +16,12 @@
 #endif
 
 namespace {
-constexpr int kItemCount = 5;
+// Tilt page-turn is only offered on boards with the QMI8658 IMU (X3).
+bool hasTilt() { return halTiltSensor.isAvailable(); }
+int itemCount() { return hasTilt() ? 6 : 5; }
+int tiltIndex() { return 3; }
+int firmwareIndex() { return hasTilt() ? 4 : 3; }
+int backIndex() { return hasTilt() ? 5 : 4; }
 
 const char* sleepLabel() {
   switch (settings.sleepTimeoutMinutes) {
@@ -89,7 +95,7 @@ void SettingsScreen::loop() {
     finish();
     return;
   }
-  if (ui::applyDelta(index, input.consumeNavigationDelta(), kItemCount)) {
+  if (ui::applyDelta(index, input.consumeNavigationDelta(), itemCount())) {
     requestUpdate();
   } else if (input.wasReleased(MappedInput::Button::Confirm)) {
     if (index == 0) {
@@ -102,7 +108,10 @@ void SettingsScreen::loop() {
       settings.nightMode = settings.nightMode ? 0 : 1;
       display.setInverted(settings.nightMode != 0);
       LOG_INF("SET", "Night mode %s", settings.nightMode ? "on" : "off");
-    } else if (index == 3) {
+    } else if (hasTilt() && index == tiltIndex()) {
+      settings.tiltPageTurn = settings.tiltPageTurn ? 0 : 1;
+      LOG_INF("SET", "Tilt page turn %s", settings.tiltPageTurn ? "on" : "off");
+    } else if (index == firmwareIndex()) {
       settings.save();
       goToFirmwareUpdate();
       return;
@@ -122,11 +131,25 @@ void SettingsScreen::render() {
 
   char night[32];
   snprintf(night, sizeof(night), "Night mode: %s", settings.nightMode ? "on" : "off");
-  const char* labels[kItemCount] = {sleepLabel(), refreshLabel(), night, "Update firmware", "Back"};
+  char tilt[32];
+  snprintf(tilt, sizeof(tilt), "Tilt page turn: %s", settings.tiltPageTurn ? "on" : "off");
+
+  const char* labels[6];
+  labels[0] = sleepLabel();
+  labels[1] = refreshLabel();
+  labels[2] = night;
+  if (hasTilt()) {
+    labels[3] = tilt;
+    labels[4] = "Update firmware";
+    labels[5] = "Back";
+  } else {
+    labels[3] = "Update firmware";
+    labels[4] = "Back";
+  }
 
   const int rowH = gfx.lineHeight(FONT_UI) + 10;
   const int startY = 90;
-  for (int i = 0; i < kItemCount; ++i) {
+  for (int i = 0; i < itemCount(); ++i) {
     ui::drawMenuRow(gfx, startY + i * rowH, rowH, labels[i], i == index);
   }
 
