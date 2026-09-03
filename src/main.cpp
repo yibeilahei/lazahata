@@ -137,10 +137,19 @@ void setup() {
 
 void loop() {
   mappedInput.update();
-  halTiltSensor.update(settings.tiltPageTurn, CrossPointOrientation::PORTRAIT, screenManager.isReader());
   if (power::consumeWakeRelease(gpio)) {
     return;
   }
+  if (power::maybeToggleLightSleep(gpio)) {
+    return;
+  }
+  if (power::isAsleep()) {
+    // Ignore all input while asleep; only the short power press handled
+    // above (toggling back off) has any effect.
+    power::idleDelay();
+    return;
+  }
+  halTiltSensor.update(settings.tiltPageTurn, CrossPointOrientation::PORTRAIT, screenManager.isReader());
   power::noteUserActivity(gpio);
   if (power::maybeSleep(gpio, settings)) {
     return;

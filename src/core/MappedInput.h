@@ -31,9 +31,9 @@ class MappedInput {
 
   // Net list/page delta from this frame's release edges plus taps drained during a blocking refresh.
   int consumeNavigationDelta();
-  // Reader paging. X3: both side buttons and a short power press go forward;
-  // front Left is back. X4: Down/Right/short power forward, Up/Left back.
-  // Hold-to-sleep is unchanged.
+  // Reader paging. X3: both side buttons go forward; front Left is back.
+  // X4: Down/Right forward, Up/Left back. The power button no longer pages
+  // (short press now toggles light sleep; see core/Power.h).
   int consumeReaderPageDelta();
 
  private:

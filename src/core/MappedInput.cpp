@@ -3,12 +3,7 @@
 #include <HalDisplay.h>
 #include <HalTiltSensor.h>
 
-#include "core/Power.h"
 #include "core/Settings.h"
-
-namespace {
-constexpr unsigned long kShortPowerMs = 800;
-}  // namespace
 
 uint16_t MappedInput::pendingForwardTaps = 0;
 uint16_t MappedInput::pendingBackTaps = 0;
@@ -63,10 +58,6 @@ bool MappedInput::busyWaitPoll(int8_t /*busyPin*/, uint8_t /*busyLevel*/) {
   }
   if (::gpio.wasReleased(HalGPIO::BTN_LEFT) || (!edgeSides && ::gpio.wasReleased(HalGPIO::BTN_UP))) {
     ++pendingBackTaps;
-  }
-  if (::gpio.wasReleased(HalGPIO::BTN_POWER) && !power::isWakeReleasePending() &&
-      ::gpio.getPowerButtonHeldTime() <= kShortPowerMs) {
-    ++pendingForwardTaps;
   }
   if (::gpio.wasReleased(HalGPIO::BTN_CONFIRM)) {
     ++pendingConfirmTaps;
@@ -136,9 +127,6 @@ int MappedInput::consumeReaderPageDelta() {
   }
   if (wasReleased(Button::Left) || (!edgeSides && wasReleased(Button::Up))) {
     --delta;
-  }
-  if (wasReleased(Button::Power) && !power::isWakeReleasePending() && powerHeldMs() <= kShortPowerMs) {
-    ++delta;
   }
   // Flick gesture pages forward only, regardless of flick direction.
   if (settings.tiltPageTurn && (halTiltSensor.wasTiltedForward() || halTiltSensor.wasTiltedBack())) {
