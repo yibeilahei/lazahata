@@ -6,7 +6,7 @@
 #include "network/FileTransferServer.h"
 
 // Shown once Wi-Fi is connected: runs the HTTP file transfer server and
-// displays the connection URL. Back stops the server and disconnects Wi-Fi.
+// displays the connection URL. Back ends the Wi-Fi session (restart).
 class FileTransferScreen final : public Screen {
   std::string ssid;
   FileTransferServer server;

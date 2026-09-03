@@ -17,11 +17,13 @@ class WifiListScreen final : public Screen {
   std::string enteredPassword;
 
   void selectNetwork();
+  void startConnecting(const char* password);
   void goToFileTransfer();
 
  public:
   WifiListScreen(Gfx& gfx, MappedInput& input) : Screen("WifiList", gfx, input) {}
   void onEnter() override;
+  void onExit() override;
   void loop() override;
   void render() override;
   bool blocksSleep() const override { return true; }

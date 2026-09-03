@@ -44,8 +44,6 @@ class FileTransferServer {
     static constexpr size_t kBufferSize = 16384;
     std::vector<uint8_t> buffer;
     size_t bufferPos = 0;
-
-    UploadState() { buffer.resize(kBufferSize); }
   } upload;
 
   void handleRoot() const;

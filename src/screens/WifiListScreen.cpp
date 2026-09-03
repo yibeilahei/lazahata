@@ -10,17 +10,24 @@
 #include "core/UiList.h"
 #include "core/fontIds.h"
 #include "network/WifiCredentialStore.h"
+#include "network/WifiSession.h"
 #include "screens/FileTransferScreen.h"
 #include "screens/KeyboardScreen.h"
 
 void WifiListScreen::onEnter() {
   Screen::onEnter();
+  WifiSession::begin();
   state = State::Scanning;
   networks.clear();
   index = 0;
   window = 0;
   wifiManager.startScan();
   requestUpdate();
+}
+
+void WifiListScreen::onExit() {
+  Screen::onExit();
+  WifiSession::end(gfx);
 }
 
 void WifiListScreen::selectNetwork() {
@@ -32,17 +39,13 @@ void WifiListScreen::selectNetwork() {
   enteredPassword.clear();
 
   if (!net.encrypted) {
-    wifiManager.connect(pendingSsid.c_str(), nullptr);
-    state = State::Connecting;
-    requestUpdate();
+    startConnecting(nullptr);
     return;
   }
 
   if (const auto* cred = wifiCredentials.find(net.ssid.c_str())) {
     enteredPassword = cred->password;
-    wifiManager.connect(pendingSsid.c_str(), cred->password);
-    state = State::Connecting;
-    requestUpdate();
+    startConnecting(cred->password);
     return;
   }
 
@@ -55,10 +58,15 @@ void WifiListScreen::selectNetwork() {
   push(std::move(keyboard));
 }
 
+void WifiListScreen::startConnecting(const char* password) {
+  wifiManager.connect(pendingSsid.c_str(), password);
+  state = State::Connecting;
+  requestUpdate();
+}
+
 void WifiListScreen::onPasswordEntered(const std::string& password) {
   enteredPassword = password;
-  wifiManager.connect(pendingSsid.c_str(), password.c_str());
-  state = State::Connecting;
+  startConnecting(password.c_str());
 }
 
 void WifiListScreen::onPasswordCancelled() { state = State::NetworkList; }
@@ -76,13 +84,13 @@ void WifiListScreen::goToFileTransfer() {
 }
 
 void WifiListScreen::loop() {
+  if (state != State::Failed && input.wasReleased(MappedInput::Button::Back)) {
+    finish();
+    return;
+  }
+
   switch (state) {
-    case State::Scanning: {
-      if (input.wasReleased(MappedInput::Button::Back)) {
-        wifiManager.disconnect();
-        finish();
-        return;
-      }
+    case State::Scanning:
       if (wifiManager.scanComplete(networks)) {
         state = State::NetworkList;
         index = 0;
@@ -90,13 +98,7 @@ void WifiListScreen::loop() {
         requestUpdate();
       }
       return;
-    }
     case State::NetworkList: {
-      if (input.wasReleased(MappedInput::Button::Back)) {
-        wifiManager.disconnect();
-        finish();
-        return;
-      }
       const int count = static_cast<int>(networks.size());
       if (ui::applyDelta(index, input.consumeNavigationDelta(), count)) {
         requestUpdate();
@@ -115,13 +117,12 @@ void WifiListScreen::loop() {
       }
       return;
     }
-    case State::Failed: {
+    case State::Failed:
       if (input.wasReleased(MappedInput::Button::Confirm) || input.wasReleased(MappedInput::Button::Back)) {
         state = State::NetworkList;
         requestUpdate();
       }
       return;
-    }
   }
 }
 

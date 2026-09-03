@@ -15,6 +15,15 @@ class XtchBook {
   XtchBook() = default;
   ~XtchBook();
 
+  // Allocate the decoded-page scratch buffer from a still-contiguous heap.
+  // Call from setup() before display.begin() so the framebuffer cannot split
+  // the heap underneath it. loadPageData() grows it lazily if this is skipped.
+  static bool reserveScratchBuffers(uint16_t maxWidth, uint16_t maxHeight);
+
+  // Give the page/raw scratch back so Wi-Fi/mDNS can start. Pair with
+  // WifiSession::end() — this heap cannot be unfragmented in place.
+  static void releaseScratchBuffers();
+
   xtch::Error open(const char* path);
   void close();
   bool isOpen() const { return opened; }
@@ -60,13 +69,13 @@ class XtchBook {
   std::vector<xtch::ChapterInfo> chapters;
   bool chaptersAvailable = false;
   bool chaptersLoaded = false;
-  uint8_t* pageBuffer = nullptr;
-  size_t pageBufferCapacity = 0;
-  // Scratch buffer for the raw on-disk page block (page header + body, which is
-  // compressed when PageHeader::compression != 0). pageBuffer always holds the
-  // decoded/decompressed form drawPage() expects.
-  uint8_t* rawBuffer = nullptr;
-  size_t rawBufferCapacity = 0;
+  // Shared decoded-page scratch, sized for the panel. Kept across book close()
+  // so the next open does not have to find a ~100 KB hole in a fragmented heap.
+  static uint8_t* pageBuffer;
+  static size_t pageBufferCapacity;
+  // Compressed on-disk body only. Uncompressed pages stream into pageBuffer.
+  static uint8_t* rawBuffer;
+  static size_t rawBufferCapacity;
   uint32_t loadedPageIndex = 0xFFFFFFFFu;
   xtch::PageTableEntry* pageTable = nullptr;
   uint32_t* pageCluster = nullptr;

@@ -2,12 +2,83 @@
 
 #include <Gfx.h>
 #include <Logging.h>
+#include <esp_heap_caps.h>
 
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
 #include "puff.h"
+
+uint8_t* XtchBook::pageBuffer = nullptr;
+size_t XtchBook::pageBufferCapacity = 0;
+uint8_t* XtchBook::rawBuffer = nullptr;
+size_t XtchBook::rawBufferCapacity = 0;
+
+namespace {
+// Round buffer growth up to a fixed granularity so repeated regrowth (compressed
+// page sizes vary page-to-page) converges on a small set of block sizes instead
+// of a new exact byte count every time a slightly-bigger page is seen. Most
+// "new max" pages then already fit the current (rounded-up) capacity and need
+// no malloc/free at all, which is what was fragmenting the heap: distinctly
+// sized free()/malloc() cycles scattered variously-sized holes through the same
+// region, so a later ~18-20 KB request could fail even with more than that much
+// free heap in aggregate (see XTCH OOM logs with freeHeap >> largestFreeBlock).
+constexpr size_t kBufferGrowthBlock = 4096;
+size_t roundUpToBlock(const size_t size) {
+  return (size + (kBufferGrowthBlock - 1)) & ~(kBufferGrowthBlock - 1);
+}
+
+void logHeap(const char* what) {
+  LOG_INF("XTCH", "%s: freeHeap=%u largestFreeBlock=%u", what, static_cast<unsigned>(ESP.getFreeHeap()),
+          static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)));
+}
+
+// malloc the new block first so a failure keeps the existing buffer instead of
+// dropping it on the floor (free-then-malloc lost the old page on OOM and then
+// still had nothing to decode into).
+bool growBuffer(uint8_t*& buf, size_t& cap, const size_t needed) {
+  if (needed == 0) {
+    return false;
+  }
+  if (buf != nullptr && cap >= needed) {
+    return true;
+  }
+  const size_t newCap = roundUpToBlock(needed);
+  uint8_t* next = static_cast<uint8_t*>(malloc(newCap));
+  if (!next) {
+    return false;
+  }
+  free(buf);
+  buf = next;
+  cap = newCap;
+  return true;
+}
+}  // namespace
+
+bool XtchBook::reserveScratchBuffers(const uint16_t maxWidth, const uint16_t maxHeight) {
+  const size_t colBytes = (static_cast<size_t>(maxHeight) + 7) / 8;
+  const size_t bitmapSize = colBytes * static_cast<size_t>(maxWidth) * 2;
+  const size_t totalDecoded = sizeof(xtch::PageHeader) + bitmapSize;
+  if (growBuffer(pageBuffer, pageBufferCapacity, totalDecoded)) {
+    logHeap("Reserved page buffer");
+    return true;
+  }
+  LOG_ERR("XTCH", "Failed to reserve page buffer (%lu bytes): freeHeap=%u largestFreeBlock=%u",
+          static_cast<unsigned long>(totalDecoded), static_cast<unsigned>(ESP.getFreeHeap()),
+          static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)));
+  return false;
+}
+
+void XtchBook::releaseScratchBuffers() {
+  free(pageBuffer);
+  pageBuffer = nullptr;
+  pageBufferCapacity = 0;
+  free(rawBuffer);
+  rawBuffer = nullptr;
+  rawBufferCapacity = 0;
+  logHeap("Released scratch buffers");
+}
 
 XtchBook::~XtchBook() { close(); }
 
@@ -20,12 +91,11 @@ void XtchBook::closeFile() {
 void XtchBook::close() {
   cleanupPending = false;
   closeFile();
-  free(pageBuffer);
-  pageBuffer = nullptr;
-  pageBufferCapacity = 0;
-  free(rawBuffer);
-  rawBuffer = nullptr;
-  rawBufferCapacity = 0;
+  // pageBuffer/rawBuffer are intentionally NOT freed here: they're static,
+  // shared scratch buffers sized for the panel's worst-case page, kept alive
+  // for the app's lifetime rather than reacquired (and possibly failing to
+  // find a large-enough contiguous block) every time a book is reopened. Only
+  // the logical "nothing decoded yet" state resets.
   loadedPageIndex = 0xFFFFFFFFu;
   free(pageTable);
   pageTable = nullptr;
@@ -87,7 +157,9 @@ xtch::Error XtchBook::open(const char* path) {
   if (!loadPageTable()) {
     closeFile();
     LOG_ERR("XTCH", "Page table unreadable");
-    error = xtch::Error::CorruptedHeader;
+    if (error != xtch::Error::OutOfMemory) {
+      error = xtch::Error::CorruptedHeader;
+    }
     return error;
   }
   defaultWidth = pageTable[0].width;
@@ -100,8 +172,9 @@ xtch::Error XtchBook::open(const char* path) {
   }
 
   opened = true;
-  LOG_INF("XTCH", "Opened %s (%u pages, %dx%d, title='%s')", filepath, header.pageCount, defaultWidth, defaultHeight,
-          bookTitle);
+  LOG_INF("XTCH", "Opened %s (%u pages, %dx%d, title='%s') freeHeap=%u largestFreeBlock=%u", filepath,
+          header.pageCount, defaultWidth, defaultHeight, bookTitle, static_cast<unsigned>(ESP.getFreeHeap()),
+          static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)));
   return xtch::Error::Ok;
 }
 
@@ -163,7 +236,10 @@ bool XtchBook::loadPageTable() {
   const size_t bytes = static_cast<size_t>(header.pageCount) * sizeof(xtch::PageTableEntry);
   pageTable = static_cast<xtch::PageTableEntry*>(malloc(bytes));
   if (!pageTable) {
-    LOG_ERR("XTCH", "Failed to cache page table (%u bytes)", static_cast<unsigned>(bytes));
+    LOG_ERR("XTCH", "Failed to cache page table (%u bytes): freeHeap=%u largestFreeBlock=%u",
+            static_cast<unsigned>(bytes), static_cast<unsigned>(ESP.getFreeHeap()),
+            static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)));
+    error = xtch::Error::OutOfMemory;
     return false;
   }
   if (!file.seek64(header.pageTableOffset) ||
@@ -175,9 +251,13 @@ bool XtchBook::loadPageTable() {
   }
   pageCluster = static_cast<uint32_t*>(calloc(header.pageCount, sizeof(uint32_t)));
   if (!pageCluster) {
-    LOG_ERR("XTCH", "Failed to cache page clusters");
+    LOG_ERR("XTCH", "Failed to cache page clusters (%u bytes): freeHeap=%u largestFreeBlock=%u",
+            static_cast<unsigned>(static_cast<size_t>(header.pageCount) * sizeof(uint32_t)),
+            static_cast<unsigned>(ESP.getFreeHeap()),
+            static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)));
     free(pageTable);
     pageTable = nullptr;
+    error = xtch::Error::OutOfMemory;
     return false;
   }
   pageTableCount = header.pageCount;
@@ -244,22 +324,10 @@ xtch::Error XtchBook::loadPageData(const uint32_t pageIndex) {
     return xtch::Error::CorruptedHeader;
   }
 
-  if (pageBufferCapacity < totalDecoded) {
-    free(pageBuffer);
-    pageBuffer = static_cast<uint8_t*>(malloc(totalDecoded));
-    pageBufferCapacity = pageBuffer ? totalDecoded : 0;
-  }
-  if (!pageBuffer) {
-    LOG_ERR("XTCH", "Failed to allocate page buffer (%lu bytes)", static_cast<unsigned long>(totalDecoded));
-    return xtch::Error::OutOfMemory;
-  }
-  if (rawBufferCapacity < totalOnDisk) {
-    free(rawBuffer);
-    rawBuffer = static_cast<uint8_t*>(malloc(totalOnDisk));
-    rawBufferCapacity = rawBuffer ? totalOnDisk : 0;
-  }
-  if (!rawBuffer) {
-    LOG_ERR("XTCH", "Failed to allocate raw page buffer (%lu bytes)", static_cast<unsigned long>(totalOnDisk));
+  if (!growBuffer(pageBuffer, pageBufferCapacity, totalDecoded)) {
+    LOG_ERR("XTCH", "Failed to allocate page buffer (%lu bytes): freeHeap=%u largestFreeBlock=%u",
+            static_cast<unsigned long>(totalDecoded), static_cast<unsigned>(ESP.getFreeHeap()),
+            static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)));
     return xtch::Error::OutOfMemory;
   }
 
@@ -278,15 +346,17 @@ xtch::Error XtchBook::loadPageData(const uint32_t pageIndex) {
     }
   }
 
-  const size_t bytesRead = static_cast<size_t>(file.read(rawBuffer, totalOnDisk));
-  if (bytesRead != totalOnDisk) {
-    LOG_ERR("XTCH", "Short page read for page %lu: got %lu of %lu", static_cast<unsigned long>(pageIndex),
-            static_cast<unsigned long>(bytesRead), static_cast<unsigned long>(totalOnDisk));
+  // Read the 22-byte page header first so uncompressed pages can stream the
+  // body straight into pageBuffer. The previous path always malloc'd a second
+  // rawBuffer the size of the whole on-disk page (~100 KB again) just to
+  // memcpy it — that second block is what OOMed after WiFi had fragmented
+  // the heap, even when freeHeap still looked comfortable.
+  xtch::PageHeader pageHeader{};
+  if (static_cast<size_t>(file.read(reinterpret_cast<uint8_t*>(&pageHeader), sizeof(pageHeader))) !=
+      sizeof(pageHeader)) {
+    LOG_ERR("XTCH", "Short page header read for page %lu", static_cast<unsigned long>(pageIndex));
     return xtch::Error::ReadError;
   }
-
-  xtch::PageHeader pageHeader{};
-  memcpy(&pageHeader, rawBuffer, sizeof(pageHeader));
   if (pageHeader.magic != xtch::XTH_MAGIC) {
     LOG_ERR("XTCH", "Bad page magic 0x%08lX (need XTH)", static_cast<unsigned long>(pageHeader.magic));
     return xtch::Error::InvalidMagic;
@@ -297,7 +367,7 @@ xtch::Error XtchBook::loadPageData(const uint32_t pageIndex) {
     return xtch::Error::CorruptedHeader;
   }
 
-  const uint8_t* rawBody = rawBuffer + sizeof(xtch::PageHeader);
+  memcpy(pageBuffer, &pageHeader, sizeof(pageHeader));
   uint8_t* decodedBody = pageBuffer + sizeof(xtch::PageHeader);
 
   if (pageHeader.compression == 0) {
@@ -308,19 +378,36 @@ xtch::Error XtchBook::loadPageData(const uint32_t pageIndex) {
               static_cast<unsigned long>(bitmapSize));
       return xtch::Error::CorruptedHeader;
     }
-    memcpy(decodedBody, rawBody, bitmapSize);
+    if (static_cast<size_t>(file.read(decodedBody, bitmapSize)) != bitmapSize) {
+      LOG_ERR("XTCH", "Short page body read for page %lu", static_cast<unsigned long>(pageIndex));
+      return xtch::Error::ReadError;
+    }
   } else if (pageHeader.compression == 1) {
     // Raw-DEFLATE (no zlib/gzip wrapper): dataSize is the on-disk compressed body
     // length; the decompressed length is always bitmapSize (derived from width/height).
-    if (static_cast<size_t>(pageHeader.dataSize) + sizeof(xtch::PageHeader) != totalOnDisk) {
+    const size_t compressedSize = static_cast<size_t>(pageHeader.dataSize);
+    if (compressedSize + sizeof(xtch::PageHeader) != totalOnDisk) {
       LOG_ERR("XTCH", "Page %lu compressed size mismatch: dataSize=%lu on-disk=%lu",
               static_cast<unsigned long>(pageIndex), static_cast<unsigned long>(pageHeader.dataSize),
               static_cast<unsigned long>(totalOnDisk));
       return xtch::Error::CorruptedHeader;
     }
+    if (!growBuffer(rawBuffer, rawBufferCapacity, compressedSize)) {
+      // freeHeap vs. largestFreeBlock tells apart genuine shortage (both low)
+      // from fragmentation (freeHeap comfortably above the request, but no
+      // single contiguous block is big enough).
+      LOG_ERR("XTCH", "Failed to allocate raw page buffer (%lu bytes): freeHeap=%u largestFreeBlock=%u",
+              static_cast<unsigned long>(compressedSize), static_cast<unsigned>(ESP.getFreeHeap()),
+              static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)));
+      return xtch::Error::OutOfMemory;
+    }
+    if (static_cast<size_t>(file.read(rawBuffer, compressedSize)) != compressedSize) {
+      LOG_ERR("XTCH", "Short compressed body read for page %lu", static_cast<unsigned long>(pageIndex));
+      return xtch::Error::ReadError;
+    }
     unsigned long destLen = static_cast<unsigned long>(bitmapSize);
-    unsigned long sourceLen = static_cast<unsigned long>(pageHeader.dataSize);
-    const int puffErr = puff(decodedBody, &destLen, rawBody, &sourceLen);
+    unsigned long sourceLen = static_cast<unsigned long>(compressedSize);
+    const int puffErr = puff(decodedBody, &destLen, rawBuffer, &sourceLen);
     if (puffErr != 0 || destLen != bitmapSize) {
       LOG_ERR("XTCH", "Page %lu decompression failed: err=%d decoded=%lu expected=%lu",
               static_cast<unsigned long>(pageIndex), puffErr, destLen,

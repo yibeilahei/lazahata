@@ -55,6 +55,11 @@ bool WifiManager::scanComplete(std::vector<Network>& out) {
 void WifiManager::connect(const char* ssid, const char* password) {
   LOG_INF("WIFI", "Connecting to '%s'", ssid ? ssid : "");
   WiFi.mode(WIFI_STA);
+  // Abort any prior connect attempt first. Without this, retrying right
+  // after a timeout (the underlying esp-idf driver may still be mid-connect)
+  // makes WiFi.begin() fail immediately with "sta is connecting, cannot set
+  // config", which then times out again — an unrecoverable retry loop.
+  WiFi.disconnect();
   if (password && password[0] != '\0') {
     WiFi.begin(ssid, password);
   } else {
@@ -75,6 +80,9 @@ WifiManager::ConnectState WifiManager::pollConnect() {
   }
   if (millis() - connectStartMs > kConnectTimeoutMs) {
     LOG_ERR("WIFI", "Connect timed out (status=%d)", static_cast<int>(status));
+    // Abort the stuck attempt so a subsequent connect() doesn't immediately
+    // fail with "sta is connecting, cannot set config".
+    WiFi.disconnect();
     return ConnectState::Failed;
   }
   return ConnectState::Connecting;

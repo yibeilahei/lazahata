@@ -7,7 +7,7 @@
 #include <cstdio>
 
 #include "core/fontIds.h"
-#include "network/WifiManager.h"
+#include "network/WifiSession.h"
 
 void FileTransferScreen::onEnter() {
   Screen::onEnter();
@@ -20,8 +20,8 @@ void FileTransferScreen::onEnter() {
 
 void FileTransferScreen::onExit() {
   server.stop();
-  wifiManager.disconnect();
   Screen::onExit();
+  WifiSession::end(gfx);
 }
 
 void FileTransferScreen::loop() {

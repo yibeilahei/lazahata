@@ -11,6 +11,7 @@
 #include <HalTiltSensor.h>
 #include <Logging.h>
 #include <WiFi.h>
+#include <Xtch.h>
 #include <builtinFonts/all.h>
 
 #include "core/ScreenManager.h"
@@ -66,6 +67,9 @@ void setup() {
 
   HalSystem::begin();
   gpio.begin();
+  // Page buffer first, framebuffer second: see XtchBook::reserveScratchBuffers.
+  // WifiSession::end() restarts so this runs again on a clean heap.
+  XtchBook::reserveScratchBuffers(BoardConfig::ACTIVE.displayWidth, BoardConfig::ACTIVE.displayHeight);
   powerManager.begin();
   halTiltSensor.begin();
   halClock.begin();

@@ -136,11 +136,13 @@ bool FileTransferServer::begin() {
   mdnsStarted = MDNS.begin(mdnsHostname.c_str());
   if (mdnsStarted) {
     MDNS.addService("http", "tcp", 80);
-    LOG_INF("XFER", "Server started on port 80, mdns=%s.local", mdnsHostname.c_str());
+    LOG_INF("XFER", "Server started on port 80, mdns=%s.local freeHeap=%u maxAlloc=%u", mdnsHostname.c_str(),
+            static_cast<unsigned>(ESP.getFreeHeap()), static_cast<unsigned>(ESP.getMaxAllocHeap()));
   } else {
     LOG_ERR("XFER", "mDNS failed to start");
     mdnsHostname.clear();
-    LOG_INF("XFER", "Server started on port 80");
+    LOG_INF("XFER", "Server started on port 80, freeHeap=%u maxAlloc=%u",
+            static_cast<unsigned>(ESP.getFreeHeap()), static_cast<unsigned>(ESP.getMaxAllocHeap()));
   }
   return true;
 }
@@ -159,6 +161,7 @@ void FileTransferServer::stop() {
   }
   uploadHandler = nullptr;
   running = false;
+  LOG_INF("XFER", "Server stopped");
 }
 
 void FileTransferServer::handleClient() {
@@ -289,6 +292,9 @@ void FileTransferServer::handleUploadStart() {
     return;
   }
   upload.success = true;
+  if (upload.buffer.size() < UploadState::kBufferSize) {
+    upload.buffer.resize(UploadState::kBufferSize);
+  }
 
   // Reserve one contiguous extent up front using the client's declared
   // body size as an (over-)estimate: this skips per-cluster FAT chain
