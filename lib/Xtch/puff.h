@@ -25,10 +25,13 @@
 /*
  * See puff.c for purpose and usage.
  *
- * Vendored unmodified from https://github.com/madler/zlib/tree/master/contrib/puff
+ * Vendored from https://github.com/madler/zlib/tree/master/contrib/puff
  * for XTCH page decompression (raw DEFLATE, no zlib/gzip wrapper). Chosen over
  * zlib's inflate for its tiny footprint (~4K code, <2K stack, no heap use) since
  * decode speed is not the bottleneck here (e-ink refresh dominates page turns).
+ *
+ * Altered from upstream: puff_stream() inflates from a refill callback so the
+ * compressed page does not have to sit in a single heap allocation.
  */
 #ifndef NIL
 #  define NIL ((unsigned char *)0)      /* for no output option */
@@ -42,6 +45,16 @@ int puff(unsigned char *dest,           /* pointer to destination pointer */
          unsigned long *destlen,        /* amount of output space */
          const unsigned char *source,   /* pointer to source data pointer */
          unsigned long *sourcelen);     /* amount of input available */
+
+/* Read compressed bytes into buf (capacity cap). Return bytes written, 0 on
+ * end of input, or a negative value on I/O error. */
+typedef int (*puff_refill_fn)(unsigned char *buf, unsigned long cap, void *user);
+
+/* Like puff(), but pulls compressed bytes through refill() into the caller-
+ * provided inbuf instead of requiring the whole stream in memory. */
+int puff_stream(unsigned char *dest, unsigned long *destlen,
+                puff_refill_fn refill, void *user,
+                unsigned char *inbuf, unsigned long inbufcap);
 
 #ifdef __cplusplus
 }

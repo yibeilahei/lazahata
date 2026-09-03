@@ -20,7 +20,7 @@ class XtchBook {
   // the heap underneath it. loadPageData() grows it lazily if this is skipped.
   static bool reserveScratchBuffers(uint16_t maxWidth, uint16_t maxHeight);
 
-  // Give the page/raw scratch back so Wi-Fi/mDNS can start. Pair with
+  // Give the decoded-page scratch back so Wi-Fi/mDNS can start. Pair with
   // WifiSession::end() — this heap cannot be unfragmented in place.
   static void releaseScratchBuffers();
 
@@ -73,9 +73,6 @@ class XtchBook {
   // so the next open does not have to find a ~100 KB hole in a fragmented heap.
   static uint8_t* pageBuffer;
   static size_t pageBufferCapacity;
-  // Compressed on-disk body only. Uncompressed pages stream into pageBuffer.
-  static uint8_t* rawBuffer;
-  static size_t rawBufferCapacity;
   uint32_t loadedPageIndex = 0xFFFFFFFFu;
   xtch::PageTableEntry* pageTable = nullptr;
   uint32_t* pageCluster = nullptr;

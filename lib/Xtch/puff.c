@@ -4,8 +4,10 @@
  * For conditions of distribution and use, see copyright notice in puff.h
  * version 2.3, 21 Jan 2013
  *
- * Vendored unmodified into lazahata for XTCH per-page decompression (see
- * lib/Xtch/Xtch.cpp). Upstream: https://github.com/madler/zlib/tree/master/contrib/puff
+ * Vendored into lazahata for XTCH per-page decompression (see lib/Xtch/Xtch.cpp).
+ * Upstream: https://github.com/madler/zlib/tree/master/contrib/puff
+ * Altered: streaming input via puff_stream() so compressed pages can inflate
+ * from a small SD window instead of a second ~20-30 KB heap block.
  *
  * puff.c is a simple inflate written to be an unambiguous way to specify the
  * deflate format.  It is not written for speed but rather simplicity.  As a
@@ -83,6 +85,7 @@
  */
 
 #include <setjmp.h>             /* for setjmp(), longjmp(), and jmp_buf */
+#include <string.h>             /* memmove(), memcpy() */
 #include "puff.h"               /* prototype for puff() */
 
 #define local static            /* for local function definitions */
@@ -111,9 +114,39 @@ struct state {
     int bitbuf;                 /* bit buffer */
     int bitcnt;                 /* number of bits in bit buffer */
 
+    /* streaming input (NULL refill keeps puff() on a single in-memory block) */
+    unsigned char *inbuf;
+    unsigned long incap;
+    puff_refill_fn refill;
+    void *refill_user;
+
     /* input limit error return state for bits() and decode() */
     jmp_buf env;
 };
+
+/* Slide any unread bytes to the start of inbuf and append more from refill.
+   Returns 1 if at least one new byte arrived, 0 on EOF/error/no-stream. */
+local int refill_in(struct state *s)
+{
+    unsigned long remain;
+    int got;
+
+    if (s->refill == NULL || s->inbuf == NULL || s->incap == 0)
+        return 0;
+    remain = s->inlen - s->incnt;
+    if (remain && s->incnt)
+        memmove(s->inbuf, s->inbuf + s->incnt, remain);
+    s->incnt = 0;
+    s->inlen = remain;
+    s->in = s->inbuf;
+    if (remain >= s->incap)
+        return 0;
+    got = s->refill(s->inbuf + remain, s->incap - remain, s->refill_user);
+    if (got <= 0)
+        return 0;
+    s->inlen = remain + (unsigned long)got;
+    return 1;
+}
 
 /*
  * Return need bits from the input stream.  This always leaves less than
@@ -133,7 +166,7 @@ local int bits(struct state *s, int need)
     /* load at least need bits into val */
     val = s->bitbuf;
     while (s->bitcnt < need) {
-        if (s->incnt == s->inlen)
+        if (s->incnt == s->inlen && !refill_in(s))
             longjmp(s->env, 1);         /* out of input */
         val |= (long)(s->in[s->incnt++]) << s->bitcnt;  /* load eight bits */
         s->bitcnt += 8;
@@ -173,26 +206,32 @@ local int stored(struct state *s)
     s->bitcnt = 0;
 
     /* get length and check against its one's complement */
-    if (s->incnt + 4 > s->inlen)
-        return 2;                               /* not enough input */
+    while (s->incnt + 4 > s->inlen)
+        if (!refill_in(s))
+            return 2;                           /* not enough input */
     len = s->in[s->incnt++];
     len |= s->in[s->incnt++] << 8;
     if (s->in[s->incnt++] != (~len & 0xff) ||
         s->in[s->incnt++] != ((~len >> 8) & 0xff))
         return -2;                              /* didn't match complement! */
 
-    /* copy len bytes from in to out */
-    if (s->incnt + len > s->inlen)
-        return 2;                               /* not enough input */
-    if (s->out != NIL) {
-        if (s->outcnt + len > s->outlen)
-            return 1;                           /* not enough output space */
-        while (len--)
-            s->out[s->outcnt++] = s->in[s->incnt++];
-    }
-    else {                                      /* just scanning */
-        s->outcnt += len;
-        s->incnt += len;
+    /* copy len bytes from in to out, refilling the window as needed so a
+       stored block larger than inbuf still copies */
+    if (s->out != NIL && s->outcnt + len > s->outlen)
+        return 1;                               /* not enough output space */
+    while (len) {
+        unsigned long n;
+
+        if (s->incnt == s->inlen && !refill_in(s))
+            return 2;                           /* not enough input */
+        n = s->inlen - s->incnt;
+        if (n > len)
+            n = len;
+        if (s->out != NIL)
+            memcpy(s->out + s->outcnt, s->in + s->incnt, n);
+        s->outcnt += n;
+        s->incnt += n;
+        len -= n;
     }
 
     /* done with a valid stored block */
@@ -298,7 +337,7 @@ local int decode(struct state *s, const struct huffman *h)
         left = (MAXBITS+1) - len;
         if (left == 0)
             break;
-        if (s->incnt == s->inlen)
+        if (s->incnt == s->inlen && !refill_in(s))
             longjmp(s->env, 1);         /* out of input */
         bitbuf = s->in[s->incnt++];
         if (left > 8)
@@ -813,6 +852,10 @@ int puff(unsigned char *dest,           /* pointer to destination pointer */
     s.incnt = 0;
     s.bitbuf = 0;
     s.bitcnt = 0;
+    s.inbuf = 0;
+    s.incap = 0;
+    s.refill = 0;
+    s.refill_user = 0;
 
     /* return if bits() or decode() tries to read past available input */
     if (setjmp(s.env) != 0)             /* if came back here via longjmp() */
@@ -839,5 +882,55 @@ int puff(unsigned char *dest,           /* pointer to destination pointer */
         *destlen = s.outcnt;
         *sourcelen = s.incnt;
     }
+    return err;
+}
+
+int puff_stream(unsigned char *dest,
+                unsigned long *destlen,
+                puff_refill_fn refill,
+                void *user,
+                unsigned char *inbuf,
+                unsigned long inbufcap)
+{
+    struct state s;
+    int last, type;
+    int err;
+
+    if (destlen == 0 || refill == 0 || inbuf == 0 || inbufcap == 0)
+        return 2;
+
+    s.out = dest;
+    s.outlen = *destlen;
+    s.outcnt = 0;
+    s.in = inbuf;
+    s.inlen = 0;
+    s.incnt = 0;
+    s.bitbuf = 0;
+    s.bitcnt = 0;
+    s.inbuf = inbuf;
+    s.incap = inbufcap;
+    s.refill = refill;
+    s.refill_user = user;
+
+    if (setjmp(s.env) != 0)
+        err = 2;
+    else {
+        do {
+            last = bits(&s, 1);
+            type = bits(&s, 2);
+            err = type == 0 ?
+                    stored(&s) :
+                    (type == 1 ?
+                        fixed(&s) :
+                        (type == 2 ?
+                            dynamic(&s) :
+                            -1));
+            if (err != 0)
+                break;
+        } while (!last);
+    }
+
+    if (err <= 0)
+        *destlen = s.outcnt;
     return err;
 }
