@@ -1,6 +1,7 @@
 #include "core/Power.h"
 
 #include <Arduino.h>
+#include <Gfx.h>
 #include <HalDisplay.h>
 #include <HalGPIO.h>
 #include <HalPowerManager.h>
@@ -9,6 +10,8 @@
 
 #include "core/ScreenManager.h"
 #include "core/Settings.h"
+
+extern Gfx gfx;
 
 namespace {
 unsigned long allowSleepAt = 0;
@@ -24,6 +27,26 @@ bool suppressNextPowerShortPress = false;
 // sleep); at or beyond it, the button is treated as the deep-sleep hold in
 // maybeSleep() instead.
 constexpr unsigned long kShortPressMs = 800;
+
+void paintDeepSleepWhite() {
+  // Physical white regardless of night mode: inversion is applied on the
+  // way to the panel, so turn it off before filling 0xFF.
+  display.setInverted(false);
+  display.clearScreen(0xFF);
+  display.displayBuffer(HalDisplay::FULL_REFRESH);
+}
+
+void paintLightSleepMarker() {
+  gfx.fillRect(1, 1, 3, 3, true);
+  gfx.present(HalDisplay::FAST_REFRESH);
+}
+
+void enterDeepSleep(HalGPIO& gpio) {
+  paintDeepSleepWhite();
+  halTiltSensor.deepSleep();
+  display.deepSleep();
+  powerManager.startDeepSleep(gpio);
+}
 }  // namespace
 
 void power::noteWakeHold() {
@@ -63,18 +86,14 @@ bool power::maybeSleep(HalGPIO& gpio, const Settings& settings) {
   if (powerReleasedSinceWake && millis() >= allowSleepAt && gpio.isPressed(HalGPIO::BTN_POWER) &&
       gpio.getPowerButtonHeldTime() > 800) {
     LOG_INF("SLP", "Power hold, sleeping");
-    halTiltSensor.deepSleep();
-    display.deepSleep();
-    powerManager.startDeepSleep(gpio);
+    enterDeepSleep(gpio);
     return true;
   }
 
   const unsigned long sleepMs = settings.sleepTimeoutMs();
   if (sleepMs > 0 && millis() - lastActivity >= sleepMs) {
     LOG_INF("SLP", "Idle timeout");
-    halTiltSensor.deepSleep();
-    display.deepSleep();
-    powerManager.startDeepSleep(gpio);
+    enterDeepSleep(gpio);
     return true;
   }
   return false;
@@ -116,6 +135,7 @@ bool power::maybeToggleLightSleep(HalGPIO& gpio) {
   if (gpio.wasReleased(HalGPIO::BTN_POWER) && gpio.getPowerButtonHeldTime() <= kShortPressMs) {
     lightAsleep = true;
     LOG_INF("SLP", "Short press, light sleep");
+    paintLightSleepMarker();
     return true;
   }
   return false;

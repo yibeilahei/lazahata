@@ -14,10 +14,10 @@ bool maybeSleep(HalGPIO& gpio, const Settings& settings);
 void idleDelay();
 
 // Light sleep: a short power-button press (released before the deep-sleep
-// hold threshold) puts the device into a state where it stays powered on but
-// ignores all button/touch/tilt input. Any physical button press wakes it
-// back up (tilt/flick gestures do not). Unlike maybeSleep()'s deep sleep,
-// this does not power the board down or reset it on wake.
+// hold threshold) keeps the last page on screen with a small marker dot at
+// the top-left edge and ignores input. Any physical button press wakes it
+// (tilt/flick gestures do not). Deep sleep (hold or idle timeout) instead
+// paints a physical white page, then powers the board down.
 bool isAsleep();
 // Call once per loop iteration (after mappedInput.update()). Returns true if
 // this call just toggled light sleep on or off, in which case the caller

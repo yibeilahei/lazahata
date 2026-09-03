@@ -145,6 +145,9 @@ void loop() {
     return;
   }
   if (power::maybeToggleLightSleep(gpio)) {
+    if (!power::isAsleep()) {
+      screenManager.requestRedraw();
+    }
     return;
   }
   if (power::isAsleep()) {
