@@ -24,9 +24,6 @@ class ScreenManager {
 
   void loop();
   void requestUpdate() { dirty = true; }
-  // Wake from light sleep: onResume() (so the reader does a clean refresh)
-  // then repaint, which also removes the light-sleep marker dot.
-  void requestRedraw();
   void replace(std::unique_ptr<Screen> screen);
   void push(std::unique_ptr<Screen> screen);
   // levels > 1 skips intermediate screens (e.g. return straight to the reader

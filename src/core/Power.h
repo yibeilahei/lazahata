@@ -13,14 +13,10 @@ void noteUserActivity(HalGPIO& gpio);
 bool maybeSleep(HalGPIO& gpio, const Settings& settings);
 void idleDelay();
 
-// Light sleep: a short power-button press (released before the deep-sleep
-// hold threshold) keeps the last page on screen with a small marker dot at
-// the top-left edge and ignores input. Any physical button press wakes it
-// (tilt/flick gestures do not). Deep sleep (hold or idle timeout) instead
-// paints a physical white page, then powers the board down.
-bool isAsleep();
-// Call once per loop iteration (after mappedInput.update()). Returns true if
-// this call just toggled light sleep on or off, in which case the caller
-// should skip the rest of the iteration.
-bool maybeToggleLightSleep(HalGPIO& gpio);
+// Short power-button press (released before the deep-sleep hold) toggles a
+// gyroscope lock so picking up the device cannot turn pages. The auto-sleep
+// timer enters the same lock instead of powering off. Buttons and the last
+// page stay live; a long power hold still deep-sleeps to a white page.
+bool tiltLocked();
+bool maybeToggleTiltLock(HalGPIO& gpio);
 }  // namespace power

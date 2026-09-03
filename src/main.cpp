@@ -144,19 +144,11 @@ void loop() {
   if (power::consumeWakeRelease(gpio)) {
     return;
   }
-  if (power::maybeToggleLightSleep(gpio)) {
-    if (!power::isAsleep()) {
-      screenManager.requestRedraw();
-    }
+  if (power::maybeToggleTiltLock(gpio)) {
     return;
   }
-  if (power::isAsleep()) {
-    // Ignore all input while asleep; only the short power press handled
-    // above (toggling back off) has any effect.
-    power::idleDelay();
-    return;
-  }
-  halTiltSensor.update(settings.tiltPageTurn, CrossPointOrientation::PORTRAIT, screenManager.isReader());
+  const uint8_t tiltMode = power::tiltLocked() ? CrossPointTiltPageTurn::TILT_OFF : settings.tiltPageTurn;
+  halTiltSensor.update(tiltMode, CrossPointOrientation::PORTRAIT, screenManager.isReader());
   power::noteUserActivity(gpio);
   if (power::maybeSleep(gpio, settings)) {
     return;

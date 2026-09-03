@@ -77,13 +77,6 @@ void ScreenManager::applyPending() {
   }
 }
 
-void ScreenManager::requestRedraw() {
-  if (current) {
-    current->onResume();
-  }
-  dirty = true;
-}
-
 void ScreenManager::loop() {
   applyPending();
   if (current) {
