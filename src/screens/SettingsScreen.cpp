@@ -18,21 +18,49 @@
 namespace {
 // Tilt page-turn is only offered on boards with the QMI8658 IMU (X3).
 bool hasTilt() { return halTiltSensor.isAvailable(); }
-int itemCount() { return hasTilt() ? 6 : 5; }
-int tiltIndex() { return 3; }
-int firmwareIndex() { return hasTilt() ? 4 : 3; }
-int backIndex() { return hasTilt() ? 5 : 4; }
+int itemCount() { return hasTilt() ? 7 : 6; }
+int tiltIndex() { return 4; }
+int firmwareIndex() { return hasTilt() ? 5 : 4; }
 
-const char* sleepLabel() {
+void formatTimeout(char* out, size_t outSize, const char* prefix, const uint8_t minutes) {
+  if (minutes == 0) {
+    snprintf(out, outSize, "%s: never", prefix);
+  } else {
+    snprintf(out, outSize, "%s: %u min", prefix, minutes);
+  }
+}
+
+void bumpLightSleep() {
   switch (settings.sleepTimeoutMinutes) {
     case 0:
-      return "Sleep: never";
-    case 3:
-      return "Sleep: 3 min";
-    case 10:
-      return "Sleep: 10 min";
+      settings.sleepTimeoutMinutes = 1;
+      break;
+    case 1:
+      settings.sleepTimeoutMinutes = 2;
+      break;
+    case 2:
+      settings.sleepTimeoutMinutes = 3;
+      break;
     default:
-      return "Sleep: 5 min";
+      settings.sleepTimeoutMinutes = 0;
+      break;
+  }
+}
+
+void bumpTrueSleep() {
+  switch (settings.trueSleepMinutes) {
+    case 0:
+      settings.trueSleepMinutes = 10;
+      break;
+    case 10:
+      settings.trueSleepMinutes = 20;
+      break;
+    case 20:
+      settings.trueSleepMinutes = 30;
+      break;
+    default:
+      settings.trueSleepMinutes = 0;
+      break;
   }
 }
 
@@ -48,23 +76,6 @@ const char* refreshLabel() {
       return "Refresh: every 20 pages";
     default:
       return "Refresh: every 5 pages";
-  }
-}
-
-void bumpSleep() {
-  switch (settings.sleepTimeoutMinutes) {
-    case 0:
-      settings.sleepTimeoutMinutes = 3;
-      break;
-    case 3:
-      settings.sleepTimeoutMinutes = 5;
-      break;
-    case 5:
-      settings.sleepTimeoutMinutes = 10;
-      break;
-    default:
-      settings.sleepTimeoutMinutes = 0;
-      break;
   }
 }
 
@@ -99,12 +110,15 @@ void SettingsScreen::loop() {
     requestUpdate();
   } else if (input.wasReleased(MappedInput::Button::Confirm)) {
     if (index == 0) {
-      bumpSleep();
-      LOG_INF("SET", "%s", sleepLabel());
+      bumpLightSleep();
+      LOG_INF("SET", "Light sleep %u min", settings.sleepTimeoutMinutes);
     } else if (index == 1) {
+      bumpTrueSleep();
+      LOG_INF("SET", "Sleep %u min", settings.trueSleepMinutes);
+    } else if (index == 2) {
       bumpRefresh();
       LOG_INF("SET", "%s", refreshLabel());
-    } else if (index == 2) {
+    } else if (index == 3) {
       settings.nightMode = settings.nightMode ? 0 : 1;
       display.setInverted(settings.nightMode != 0);
       LOG_INF("SET", "Night mode %s", settings.nightMode ? "on" : "off");
@@ -129,22 +143,27 @@ void SettingsScreen::render() {
   gfx.clear(false);
   gfx.drawCenteredText(FONT_UI_BOLD, 24, "Settings");
 
+  char light[32];
+  char deep[32];
   char night[32];
-  snprintf(night, sizeof(night), "Night mode: %s", settings.nightMode ? "on" : "off");
   char tilt[32];
+  formatTimeout(light, sizeof(light), "Light sleep", settings.sleepTimeoutMinutes);
+  formatTimeout(deep, sizeof(deep), "Sleep", settings.trueSleepMinutes);
+  snprintf(night, sizeof(night), "Night mode: %s", settings.nightMode ? "on" : "off");
   snprintf(tilt, sizeof(tilt), "Tilt page turn: %s", settings.tiltPageTurn ? "on" : "off");
 
-  const char* labels[6];
-  labels[0] = sleepLabel();
-  labels[1] = refreshLabel();
-  labels[2] = night;
+  const char* labels[7];
+  labels[0] = light;
+  labels[1] = deep;
+  labels[2] = refreshLabel();
+  labels[3] = night;
   if (hasTilt()) {
-    labels[3] = tilt;
+    labels[4] = tilt;
+    labels[5] = "Update firmware";
+    labels[6] = "Back";
+  } else {
     labels[4] = "Update firmware";
     labels[5] = "Back";
-  } else {
-    labels[3] = "Update firmware";
-    labels[4] = "Back";
   }
 
   const int rowH = gfx.lineHeight(FONT_UI) + 10;

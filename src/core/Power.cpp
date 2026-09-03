@@ -94,8 +94,15 @@ bool power::maybeSleep(HalGPIO& gpio, const Settings& settings) {
     return true;
   }
 
-  const unsigned long sleepMs = settings.sleepTimeoutMs();
-  if (sleepMs > 0 && !tiltLock && millis() - lastActivity >= sleepMs) {
+  const unsigned long idleMs = millis() - lastActivity;
+  const unsigned long trueMs = settings.trueSleepTimeoutMs();
+  if (trueMs > 0 && idleMs >= trueMs) {
+    LOG_INF("SLP", "Idle timeout, deep sleep");
+    enterDeepSleep(gpio);
+    return true;
+  }
+  const unsigned long lightMs = settings.lightSleepTimeoutMs();
+  if (lightMs > 0 && !tiltLock && idleMs >= lightMs) {
     LOG_INF("SLP", "Idle timeout, gyro lock");
     setTiltLock(true);
   }
@@ -121,6 +128,10 @@ bool power::maybeToggleTiltLock(HalGPIO& gpio) {
   if (gpio.wasReleased(HalGPIO::BTN_POWER) && gpio.getPowerButtonHeldTime() <= kShortPressMs) {
     setTiltLock(!tiltLock);
     return true;
+  }
+
+  if (tiltLock && (gpio.wasAnyPressed() || gpio.wasAnyReleased())) {
+    setTiltLock(false);
   }
   return false;
 }
