@@ -1,46 +1,237 @@
 #pragma once
 
-// Minimal file manager page served by FileTransferServer. Plain HTML/CSS/JS,
-// no build step and no external JS libraries (unlike CrossPoint's jszip-based
-// page) — this only needs list/upload/download/mkdir/rename/move/delete.
+// File manager page served by FileTransferServer. Plain HTML/CSS/JS, no build
+// step and no external libraries — list/upload/download/mkdir/rename/move/delete.
 static const char FILE_MANAGER_PAGE[] PROGMEM = R"HTML(<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0a0a0a">
 <title>lazahata file transfer</title>
 <style>
-body { font-family: sans-serif; margin: 0; padding: 16px; background: #f4f4f4; color: #222; }
-h1 { font-size: 18px; }
-#path { font-family: monospace; margin-bottom: 8px; word-break: break-all; }
-table { width: 100%; border-collapse: collapse; background: #fff; }
-td, th { padding: 8px; border-bottom: 1px solid #ddd; text-align: left; font-size: 14px; }
-tr.dir td:first-child { font-weight: bold; cursor: pointer; }
-button { font-size: 13px; padding: 4px 8px; margin-left: 4px; }
-#toolbar { margin: 12px 0; }
-#status { color: #666; font-size: 13px; margin-top: 8px; }
-#uploadProgress { display: none; width: 100%; height: 18px; margin-top: 8px; }
-#cancelUpload { display: none; }
+:root {
+  --bg: #0a0a0a;
+  --panel: #141414;
+  --lift: #1c1c1c;
+  --line: rgba(255,255,255,.08);
+  --line2: rgba(255,255,255,.16);
+  --ink: #fcfcfc;
+  --mute: #9e9e9e;
+  --dim: #6c6c6c;
+  --accent: #ff7a17;
+  --accent-soft: rgba(255,122,23,.16);
+  --good: #9ece6a;
+  --bad: #f7768e;
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --r: 16px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--ink);
+  padding: 28px 20px 64px;
+  -webkit-font-smoothing: antialiased;
+}
+body::before {
+  content: "";
+  position: fixed;
+  inset: -30% 0 auto 0;
+  height: 52vh;
+  background: radial-gradient(ellipse at 50% 0%, rgba(255,122,23,.14), transparent 68%);
+  pointer-events: none;
+}
+.wrap { position: relative; max-width: 720px; margin: 0 auto; }
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+h1 {
+  font-size: 34px;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  margin: 0 0 22px;
+}
+#path {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 16px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--mute);
+}
+.crumb {
+  background: none;
+  border: 0;
+  color: var(--mute);
+  padding: 2px 6px;
+  border-radius: 8px;
+  font: inherit;
+  cursor: pointer;
+}
+.crumb:hover { color: var(--ink); background: rgba(255,255,255,.06); }
+.crumb.now { color: var(--ink); cursor: default; }
+.sep { color: var(--dim); padding: 0 2px; }
+#dropZone {
+  border: 1px dashed var(--line2);
+  border-radius: 22px;
+  background: var(--panel);
+  padding: 36px 20px;
+  text-align: center;
+  cursor: pointer;
+  margin-bottom: 14px;
+  transition: border-color .15s, background .15s, box-shadow .15s;
+}
+#dropZone:hover { border-color: var(--line2); background: var(--lift); }
+#dropZone.dragover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+#dropZone.busy { cursor: default; opacity: .72; }
+.drop-kicker {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+.drop-title { font-size: 18px; font-weight: 500; letter-spacing: -0.02em; }
+.drop-sub { margin-top: 6px; color: var(--mute); font-size: 13px; }
+#fileInput { display: none; }
+#toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 16px; }
+button, .btn {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .8px;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line2);
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+button:hover, .btn:hover { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.28); }
+button.ghost { color: var(--mute); }
+button.danger:hover { color: var(--bad); border-color: var(--bad); }
+#cancelUpload { display: none; color: var(--accent); border-color: rgba(255,122,23,.4); }
+#uploadProgress {
+  display: none;
+  height: 3px;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 0 0 14px;
+}
+#uploadBar {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, var(--accent), #ffc285);
+  transition: width .12s linear;
+}
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.panel-head {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--dim);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.row:last-child { border-bottom: 0; }
+.row:hover { background: rgba(255,255,255,.03); }
+.icon { width: 28px; height: 28px; color: var(--mute); display: flex; align-items: center; justify-content: center; }
+.icon svg { width: 18px; height: 18px; }
+.row.dir .icon { color: var(--accent); }
+.meta { min-width: 0; }
+.name { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row.dir .name { cursor: pointer; }
+.row.dir .name:hover { color: var(--accent); }
+.sub { font-family: var(--mono); font-size: 11px; color: var(--dim); margin-top: 2px; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.actions .btn, .actions button { padding: 6px 10px; font-size: 10px; }
+.empty { padding: 36px 16px; text-align: center; color: var(--dim); font-size: 13px; }
+#status { min-height: 20px; margin-top: 14px; font-size: 13px; color: var(--mute); }
+#status.ok { color: var(--good); }
+#status.bad { color: var(--bad); }
+footer {
+  margin-top: 28px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .4px;
+  color: var(--dim);
+}
+@media (max-width: 560px) {
+  .row { grid-template-columns: 28px 1fr; }
+  .actions { grid-column: 2; }
+}
 </style>
 </head>
 <body>
-<h1>lazahata file transfer</h1>
-<div id="path">/</div>
-<div id="toolbar">
+<div class="wrap">
+  <div class="eyebrow">file transfer</div>
+  <h1>lazahata</h1>
+  <nav id="path"></nav>
+  <div id="dropZone">
+    <div class="drop-kicker">upload</div>
+    <div class="drop-title">Drop a file</div>
+    <div class="drop-sub">or click to browse</div>
+  </div>
   <input type="file" id="fileInput">
-  <button onclick="upload()">Upload</button>
-  <button id="cancelUpload" onclick="cancelUpload()">Cancel upload</button>
-  <button onclick="mkdir()">New folder</button>
-  <button onclick="load()">Refresh</button>
+  <div id="uploadProgress"><span id="uploadBar"></span></div>
+  <div id="toolbar">
+    <button id="cancelUpload" onclick="cancelUpload()">Cancel</button>
+    <button class="ghost" onclick="mkdir()">New folder</button>
+    <button class="ghost" onclick="load()">Refresh</button>
+  </div>
+  <section class="panel">
+    <div class="panel-head">Files</div>
+    <div id="list"></div>
+  </section>
+  <div id="status"></div>
+  <footer id="foot">lazahata</footer>
 </div>
-<progress id="uploadProgress" value="0" max="100"></progress>
-<table id="list"><thead><tr><th>Name</th><th>Size</th><th></th></tr></thead><tbody></tbody></table>
-<div id="status"></div>
 <script>
 let path = "/";
 let activeUpload = null;
+const ICO_DIR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7a2 2 0 012-2h5l2 2h7a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>';
+const ICO_FILE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/></svg>';
 
-function status(msg) { document.getElementById("status").textContent = msg || ""; }
+function status(msg, kind) {
+  const el = document.getElementById("status");
+  el.textContent = msg || "";
+  el.className = kind || "";
+}
 
 function formatSize(bytes) {
   if (bytes < 1024) return bytes + " B";
@@ -51,116 +242,165 @@ function formatSize(bytes) {
   return value.toFixed(value < 10 ? 1 : 0) + " " + units[i];
 }
 
+function renderCrumbs() {
+  const nav = document.getElementById("path");
+  nav.innerHTML = "";
+  const addBtn = (label, target) => {
+    const b = document.createElement("button");
+    b.className = "crumb";
+    b.textContent = label;
+    b.onclick = () => { path = target; load(); };
+    nav.appendChild(b);
+  };
+  const addSep = () => {
+    const s = document.createElement("span");
+    s.className = "sep";
+    s.textContent = "/";
+    nav.appendChild(s);
+  };
+  if (path === "/") {
+    const now = document.createElement("span");
+    now.className = "crumb now";
+    now.textContent = "/";
+    nav.appendChild(now);
+    return;
+  }
+  addBtn("/", "/");
+  const parts = path.split("/").filter(Boolean);
+  let acc = "";
+  parts.forEach((part, i) => {
+    addSep();
+    acc += "/" + part;
+    if (i === parts.length - 1) {
+      const now = document.createElement("span");
+      now.className = "crumb now";
+      now.textContent = part;
+      nav.appendChild(now);
+    } else {
+      addBtn(part, acc);
+    }
+  });
+}
+
+function actionBtn(label, onClick, extra) {
+  const b = document.createElement("button");
+  b.textContent = label;
+  if (extra) b.className = extra;
+  b.onclick = onClick;
+  return b;
+}
+
 function load() {
-  document.getElementById("path").textContent = path;
+  renderCrumbs();
   fetch("/api/files?path=" + encodeURIComponent(path))
     .then(r => r.json())
     .then(items => {
-      const body = document.querySelector("#list tbody");
-      body.innerHTML = "";
-      if (path !== "/") {
-        const up = document.createElement("tr");
-        up.className = "dir";
-        up.innerHTML = "<td>..</td><td></td><td></td>";
-        up.querySelector("td").onclick = () => { path = path.replace(/\/[^/]+\/?$/, "") || "/"; load(); };
-        body.appendChild(up);
+      const list = document.getElementById("list");
+      list.innerHTML = "";
+      if (!items.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "This folder is empty";
+        list.appendChild(empty);
+        return;
       }
       items.forEach(item => {
-        const row = document.createElement("tr");
-        if (item.isDirectory) row.className = "dir";
-        const name = document.createElement("td");
+        const row = document.createElement("div");
+        row.className = "row" + (item.isDirectory ? " dir" : "");
+        const icon = document.createElement("div");
+        icon.className = "icon";
+        icon.innerHTML = item.isDirectory ? ICO_DIR : ICO_FILE;
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        const name = document.createElement("div");
+        name.className = "name";
         name.textContent = item.name;
-        const size = document.createElement("td");
-        size.textContent = item.isDirectory ? "" : formatSize(item.size);
-        const actions = document.createElement("td");
+        const sub = document.createElement("div");
+        sub.className = "sub";
+        sub.textContent = item.isDirectory ? "folder" : formatSize(item.size);
+        meta.appendChild(name);
+        meta.appendChild(sub);
+        const actions = document.createElement("div");
+        actions.className = "actions";
         const full = (path === "/" ? "" : path) + "/" + item.name;
         if (item.isDirectory) {
           name.onclick = () => { path = full; load(); };
         } else {
           const dl = document.createElement("a");
+          dl.className = "btn";
           dl.href = "/download?path=" + encodeURIComponent(full);
-          dl.textContent = "Download";
+          dl.textContent = "Get";
           actions.appendChild(dl);
         }
-        const ren = document.createElement("button");
-        ren.textContent = "Rename";
-        ren.onclick = () => rename(full, item.name);
-        actions.appendChild(ren);
-        const mv = document.createElement("button");
-        mv.textContent = "Move";
-        mv.onclick = () => move_(full);
-        actions.appendChild(mv);
-        const del = document.createElement("button");
-        del.textContent = "Delete";
-        del.onclick = () => del_(full);
-        actions.appendChild(del);
-        row.appendChild(name);
-        row.appendChild(size);
+        actions.appendChild(actionBtn("Rename", () => rename(full, item.name)));
+        actions.appendChild(actionBtn("Move", () => move_(full)));
+        actions.appendChild(actionBtn("Delete", () => del_(full), "danger"));
+        row.appendChild(icon);
+        row.appendChild(meta);
         row.appendChild(actions);
-        body.appendChild(row);
+        list.appendChild(row);
       });
     })
-    .catch(e => status("Error: " + e));
+    .catch(e => status("Error: " + e, "bad"));
 }
 
-function upload() {
-  const input = document.getElementById("fileInput");
-  if (!input.files.length) { status("Choose a file first"); return; }
-  const file = input.files[0];
+function upload(file) {
+  if (!file) return;
+  if (activeUpload) { status("Upload already in progress", "bad"); return; }
 
-  const bar = document.getElementById("uploadProgress");
+  const wrap = document.getElementById("uploadProgress");
+  const bar = document.getElementById("uploadBar");
   const cancelBtn = document.getElementById("cancelUpload");
-  bar.style.display = "block";
-  bar.value = 0;
-  cancelBtn.style.display = "inline-block";
+  const dropZone = document.getElementById("dropZone");
+  wrap.style.display = "block";
+  bar.style.width = "0%";
+  cancelBtn.style.display = "inline-flex";
+  dropZone.classList.add("busy");
+  dropZone.querySelector(".drop-title").textContent = file.name;
+  dropZone.querySelector(".drop-sub").textContent = "sending to device";
 
   let lastTime = performance.now();
   let lastLoaded = 0;
-  let speed = 0;  // smoothed bytes/sec
+  let speed = 0;
 
   const xhr = new XMLHttpRequest();
   activeUpload = xhr;
   xhr.upload.onprogress = (e) => {
     const now = performance.now();
     const dt = (now - lastTime) / 1000;
-    if (dt > 0.2) {  // update speed a few times a second, not on every chunk
+    if (dt > 0.2) {
       const instantSpeed = (e.loaded - lastLoaded) / dt;
-      // Exponential moving average smooths out bursty per-chunk timing.
       speed = speed ? speed * 0.7 + instantSpeed * 0.3 : instantSpeed;
       lastTime = now;
       lastLoaded = e.loaded;
     }
     if (e.lengthComputable) {
-      bar.value = Math.round((e.loaded / e.total) * 100);
-      status("Uploading... " + bar.value + "% (" + formatSize(e.loaded) + " / " + formatSize(e.total) +
-             ") - " + formatSize(speed) + "/s");
+      const pct = Math.round((e.loaded / e.total) * 100);
+      bar.style.width = pct + "%";
+      status("Uploading " + pct + "%  ·  " + formatSize(e.loaded) + " / " + formatSize(e.total) +
+             "  ·  " + formatSize(speed) + "/s");
     } else {
-      status("Uploading... " + formatSize(e.loaded) + " - " + formatSize(speed) + "/s");
+      status("Uploading  ·  " + formatSize(e.loaded) + "  ·  " + formatSize(speed) + "/s");
     }
   };
+  const resetDrop = () => {
+    activeUpload = null;
+    wrap.style.display = "none";
+    bar.style.width = "0%";
+    cancelBtn.style.display = "none";
+    dropZone.classList.remove("busy");
+    dropZone.querySelector(".drop-title").textContent = "Drop a file";
+    dropZone.querySelector(".drop-sub").textContent = "or click to browse";
+    document.getElementById("fileInput").value = "";
+  };
   xhr.onload = () => {
-    activeUpload = null;
-    bar.style.display = "none";
-    cancelBtn.style.display = "none";
-    status(xhr.responseText);
-    input.value = "";
+    const ok = xhr.status >= 200 && xhr.status < 300;
+    resetDrop();
+    status(xhr.responseText, ok ? "ok" : "bad");
     load();
   };
-  xhr.onerror = () => {
-    activeUpload = null;
-    bar.style.display = "none";
-    cancelBtn.style.display = "none";
-    status("Upload failed");
-  };
-  xhr.onabort = () => {
-    activeUpload = null;
-    bar.style.display = "none";
-    cancelBtn.style.display = "none";
-    status("Upload canceled");
-    load();
-  };
-  // Sent as a raw body (no multipart wrapper) so the device can bulk-read it
-  // straight into its write buffer instead of parsing it byte-by-byte.
+  xhr.onerror = () => { resetDrop(); status("Upload failed", "bad"); };
+  xhr.onabort = () => { resetDrop(); status("Upload canceled"); load(); };
   xhr.open("POST", "/upload");
   xhr.setRequestHeader("Content-Type", "application/octet-stream");
   xhr.setRequestHeader("X-File-Path", encodeURIComponent(path));
@@ -178,7 +418,7 @@ function mkdir() {
   fetch("/mkdir", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: "name=" + encodeURIComponent(name) + "&path=" + encodeURIComponent(path) })
     .then(() => load())
-    .catch(e => status("Error: " + e));
+    .catch(e => status("Error: " + e, "bad"));
 }
 
 function rename(fullPath, oldName) {
@@ -187,7 +427,7 @@ function rename(fullPath, oldName) {
   fetch("/rename", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: "path=" + encodeURIComponent(fullPath) + "&name=" + encodeURIComponent(name) })
     .then(() => load())
-    .catch(e => status("Error: " + e));
+    .catch(e => status("Error: " + e, "bad"));
 }
 
 function move_(fullPath) {
@@ -196,7 +436,7 @@ function move_(fullPath) {
   fetch("/move", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: "path=" + encodeURIComponent(fullPath) + "&dest=" + encodeURIComponent(dest) })
     .then(() => load())
-    .catch(e => status("Error: " + e));
+    .catch(e => status("Error: " + e, "bad"));
 }
 
 function del_(fullPath) {
@@ -204,8 +444,41 @@ function del_(fullPath) {
   fetch("/delete", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: "path=" + encodeURIComponent(fullPath) })
     .then(() => load())
-    .catch(e => status("Error: " + e));
+    .catch(e => status("Error: " + e, "bad"));
 }
+
+const dropZone = document.getElementById("dropZone");
+const fileInput = document.getElementById("fileInput");
+
+dropZone.addEventListener("click", () => {
+  if (!activeUpload) fileInput.click();
+});
+fileInput.addEventListener("change", () => {
+  if (fileInput.files.length) upload(fileInput.files[0]);
+});
+["dragenter", "dragover"].forEach(ev => {
+  dropZone.addEventListener(ev, e => {
+    e.preventDefault();
+    if (!activeUpload) dropZone.classList.add("dragover");
+  });
+});
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropZone.classList.remove("dragover");
+  const files = e.dataTransfer && e.dataTransfer.files;
+  if (files && files.length) upload(files[0]);
+});
+document.addEventListener("dragover", e => e.preventDefault());
+document.addEventListener("drop", e => e.preventDefault());
+
+fetch("/api/status").then(r => r.json()).then(s => {
+  const bits = ["lazahata"];
+  if (s.version) bits.push(s.version);
+  if (s.ssid) bits.push(s.ssid);
+  if (s.ip) bits.push(s.ip);
+  document.getElementById("foot").textContent = bits.join("  ·  ");
+}).catch(() => {});
 
 load();
 </script>

@@ -30,19 +30,27 @@ void formatTimeout(char* out, size_t outSize, const char* prefix, const uint8_t 
   }
 }
 
+void formatLightSleep(char* out, size_t outSize) {
+  if (settings.sleepTimeoutSeconds == 0) {
+    snprintf(out, outSize, "Light sleep: none");
+  } else {
+    snprintf(out, outSize, "Light sleep: %u sec", settings.sleepTimeoutSeconds);
+  }
+}
+
 void bumpLightSleep() {
-  switch (settings.sleepTimeoutMinutes) {
+  switch (settings.sleepTimeoutSeconds) {
     case 0:
-      settings.sleepTimeoutMinutes = 1;
+      settings.sleepTimeoutSeconds = 30;
       break;
-    case 1:
-      settings.sleepTimeoutMinutes = 2;
+    case 30:
+      settings.sleepTimeoutSeconds = 45;
       break;
-    case 2:
-      settings.sleepTimeoutMinutes = 3;
+    case 45:
+      settings.sleepTimeoutSeconds = 60;
       break;
     default:
-      settings.sleepTimeoutMinutes = 0;
+      settings.sleepTimeoutSeconds = 0;
       break;
   }
 }
@@ -111,7 +119,7 @@ void SettingsScreen::loop() {
   } else if (input.wasReleased(MappedInput::Button::Confirm)) {
     if (index == 0) {
       bumpLightSleep();
-      LOG_INF("SET", "Light sleep %u min", settings.sleepTimeoutMinutes);
+      LOG_INF("SET", "Light sleep %u sec", settings.sleepTimeoutSeconds);
     } else if (index == 1) {
       bumpTrueSleep();
       LOG_INF("SET", "Sleep %u min", settings.trueSleepMinutes);
@@ -147,7 +155,7 @@ void SettingsScreen::render() {
   char deep[32];
   char night[32];
   char tilt[32];
-  formatTimeout(light, sizeof(light), "Light sleep", settings.sleepTimeoutMinutes);
+  formatLightSleep(light, sizeof(light));
   formatTimeout(deep, sizeof(deep), "Sleep", settings.trueSleepMinutes);
   snprintf(night, sizeof(night), "Night mode: %s", settings.nightMode ? "on" : "off");
   snprintf(tilt, sizeof(tilt), "Tilt page turn: %s", settings.tiltPageTurn ? "on" : "off");

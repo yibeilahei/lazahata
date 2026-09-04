@@ -27,15 +27,15 @@ void Settings::load() {
   }
   *this = loaded;
   lastBookPath[sizeof(lastBookPath) - 1] = '\0';
-  if (sleepTimeoutMinutes != 0 && sleepTimeoutMinutes != 1 && sleepTimeoutMinutes != 2 &&
-      sleepTimeoutMinutes != 3) {
-    sleepTimeoutMinutes = 3;
+  if (sleepTimeoutSeconds != 0 && sleepTimeoutSeconds != 30 && sleepTimeoutSeconds != 45 &&
+      sleepTimeoutSeconds != 60) {
+    sleepTimeoutSeconds = 60;
   }
   if (trueSleepMinutes != 0 && trueSleepMinutes != 10 && trueSleepMinutes != 20 &&
       trueSleepMinutes != 30) {
     trueSleepMinutes = 10;
   }
-  LOG_INF("SET", "Loaded light=%u min sleep=%u min refresh=%u night=%u tilt=%u last='%s'", sleepTimeoutMinutes,
+  LOG_INF("SET", "Loaded light=%u sec sleep=%u min refresh=%u night=%u tilt=%u last='%s'", sleepTimeoutSeconds,
           trueSleepMinutes, refreshEveryNPages, nightMode, tiltPageTurn, lastBookPath);
 }
 
@@ -51,7 +51,7 @@ void Settings::save() const {
     LOG_ERR("SET", "Short settings write (%u of %u)", static_cast<unsigned>(n), static_cast<unsigned>(sizeof(*this)));
     return;
   }
-  LOG_DBG("SET", "Saved light=%u sleep=%u refresh=%u night=%u tilt=%u last='%s'", sleepTimeoutMinutes,
+  LOG_DBG("SET", "Saved light=%u sleep=%u refresh=%u night=%u tilt=%u last='%s'", sleepTimeoutSeconds,
           trueSleepMinutes, refreshEveryNPages, nightMode, tiltPageTurn, lastBookPath);
 }
 
@@ -64,6 +64,11 @@ unsigned long minutesToMs(const uint8_t minutes) {
 }
 }  // namespace
 
-unsigned long Settings::lightSleepTimeoutMs() const { return minutesToMs(sleepTimeoutMinutes); }
+unsigned long Settings::lightSleepTimeoutMs() const {
+  if (sleepTimeoutSeconds == 0) {
+    return 0;
+  }
+  return static_cast<unsigned long>(sleepTimeoutSeconds) * 1000UL;
+}
 
 unsigned long Settings::trueSleepTimeoutMs() const { return minutesToMs(trueSleepMinutes); }

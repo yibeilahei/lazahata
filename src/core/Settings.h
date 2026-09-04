@@ -11,7 +11,7 @@ struct Settings {
 
   uint32_t magic = MAGIC;
   uint16_t version = VERSION;
-  uint8_t sleepTimeoutMinutes = 3;  // light sleep (gyro lock); 0 = never, else 1/2/3
+  uint8_t sleepTimeoutSeconds = 60;  // light sleep (gyro lock); 0 = none, else 30/45/60
   uint8_t refreshEveryNPages = 5;
   uint8_t nightMode = 0;
   uint8_t tiltPageTurn = 0;  // 0 = off, 1 = on (flick either direction pages forward, X3 only)
