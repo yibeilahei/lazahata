@@ -74,9 +74,25 @@ class XtchBook {
   static uint8_t* pageBuffer;
   static size_t pageBufferCapacity;
   uint32_t loadedPageIndex = 0xFFFFFFFFu;
-  xtch::PageTableEntry* pageTable = nullptr;
-  uint32_t* pageCluster = nullptr;
-  uint16_t pageTableCount = 0;
+
+  // Spatial page-table window: 4 behind / 59 ahead of the miss, 1 KB, O(1) in
+  // book length. Refilled on miss (draw, prefetch N+1, or jump).
+  static constexpr uint16_t kPageTableWindowSize = 64;
+  static constexpr uint16_t kPageTableLookbehind = 4;
+  xtch::PageTableEntry pageTableWindow[kPageTableWindowSize]{};
+  uint32_t pageTableWindowStart = 0;
+  uint16_t pageTableWindowCount = 0;
+
+  // FAT cluster LRU of pages actually visited. Clusters are not in the file,
+  // so this is not a spatial window. 0 means "unknown / not cached".
+  static constexpr uint16_t kClusterLruSize = 32;
+  struct ClusterLruSlot {
+    uint32_t pageIndex;
+    uint32_t cluster;
+  };
+  ClusterLruSlot clusterLru[kClusterLruSize]{};
+  uint8_t clusterLruCount = 0;
+
   bool cleanupPending = false;
 
   bool ensureOpen();
@@ -84,7 +100,10 @@ class XtchBook {
   xtch::Error readHeader();
   xtch::Error readMetadata();
   bool loadPageTable();
+  bool ensurePageTableWindow(uint32_t pageIndex);
   bool readPageTableEntry(uint32_t pageIndex, xtch::PageInfo& info);
+  uint32_t clusterLruLookup(uint32_t pageIndex);
+  void clusterLruRemember(uint32_t pageIndex, uint32_t cluster);
   xtch::Error loadPageData(uint32_t pageIndex);
   void readChapters();
 };

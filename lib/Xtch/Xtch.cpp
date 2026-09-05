@@ -116,11 +116,9 @@ void XtchBook::close() {
   // contiguous block) every time a book is reopened. Only the logical
   // "nothing decoded yet" state resets.
   loadedPageIndex = 0xFFFFFFFFu;
-  free(pageTable);
-  pageTable = nullptr;
-  free(pageCluster);
-  pageCluster = nullptr;
-  pageTableCount = 0;
+  pageTableWindowStart = 0;
+  pageTableWindowCount = 0;
+  clusterLruCount = 0;
   opened = false;
   defaultWidth = 0;
   defaultHeight = 0;
@@ -176,13 +174,9 @@ xtch::Error XtchBook::open(const char* path) {
   if (!loadPageTable()) {
     closeFile();
     LOG_ERR("XTCH", "Page table unreadable");
-    if (error != xtch::Error::OutOfMemory) {
-      error = xtch::Error::CorruptedHeader;
-    }
+    error = xtch::Error::CorruptedHeader;
     return error;
   }
-  defaultWidth = pageTable[0].width;
-  defaultHeight = pageTable[0].height;
 
   if (file.probeContiguous()) {
     LOG_DBG("XTCH", "File is contiguous");
@@ -244,43 +238,65 @@ xtch::Error XtchBook::readMetadata() {
 }
 
 bool XtchBook::loadPageTable() {
-  free(pageTable);
-  pageTable = nullptr;
-  free(pageCluster);
-  pageCluster = nullptr;
-  pageTableCount = 0;
-  if (header.pageCount == 0) {
+  pageTableWindowStart = 0;
+  pageTableWindowCount = 0;
+  clusterLruCount = 0;
+  if (header.pageCount == 0 || header.pageTableOffset == 0) {
     return false;
   }
-  const size_t bytes = static_cast<size_t>(header.pageCount) * sizeof(xtch::PageTableEntry);
-  pageTable = static_cast<xtch::PageTableEntry*>(malloc(bytes));
-  if (!pageTable) {
-    LOG_ERR("XTCH", "Failed to cache page table (%u bytes): freeHeap=%u largestFreeBlock=%u",
-            static_cast<unsigned>(bytes), static_cast<unsigned>(ESP.getFreeHeap()),
-            static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)));
-    error = xtch::Error::OutOfMemory;
+
+  // First row only: default pixel size. The window is left empty so the first
+  // real lookup (often a resumed page, not 0) recenters around that page.
+  if (!file.seek64(header.pageTableOffset)) {
+    LOG_ERR("XTCH", "Page table seek failed");
     return false;
   }
-  if (!file.seek64(header.pageTableOffset) ||
-      static_cast<size_t>(file.read(reinterpret_cast<uint8_t*>(pageTable), bytes)) != bytes) {
-    LOG_ERR("XTCH", "Page table read failed");
-    free(pageTable);
-    pageTable = nullptr;
+  xtch::PageTableEntry first{};
+  if (static_cast<size_t>(file.read(reinterpret_cast<uint8_t*>(&first), sizeof(first))) != sizeof(first)) {
+    LOG_ERR("XTCH", "First page table entry unreadable");
     return false;
   }
-  pageCluster = static_cast<uint32_t*>(calloc(header.pageCount, sizeof(uint32_t)));
-  if (!pageCluster) {
-    LOG_ERR("XTCH", "Failed to cache page clusters (%u bytes): freeHeap=%u largestFreeBlock=%u",
-            static_cast<unsigned>(static_cast<size_t>(header.pageCount) * sizeof(uint32_t)),
-            static_cast<unsigned>(ESP.getFreeHeap()),
-            static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)));
-    free(pageTable);
-    pageTable = nullptr;
-    error = xtch::Error::OutOfMemory;
+  defaultWidth = first.width;
+  defaultHeight = first.height;
+  return true;
+}
+
+bool XtchBook::ensurePageTableWindow(const uint32_t pageIndex) {
+  if (pageTableWindowCount > 0 && pageIndex >= pageTableWindowStart &&
+      pageIndex < pageTableWindowStart + pageTableWindowCount) {
+    return true;
+  }
+  if (header.pageCount == 0 || header.pageTableOffset == 0 || !ensureOpen()) {
     return false;
   }
-  pageTableCount = header.pageCount;
-  LOG_DBG("XTCH", "Page table cached %u entries (%u bytes)", pageTableCount, static_cast<unsigned>(bytes));
+
+  uint32_t start = pageIndex >= kPageTableLookbehind ? pageIndex - kPageTableLookbehind : 0;
+  if (start + kPageTableWindowSize > header.pageCount) {
+    start = header.pageCount > kPageTableWindowSize
+                ? static_cast<uint32_t>(header.pageCount - kPageTableWindowSize)
+                : 0;
+  }
+  const uint32_t remaining = static_cast<uint32_t>(header.pageCount) - start;
+  const uint16_t count =
+      remaining < kPageTableWindowSize ? static_cast<uint16_t>(remaining) : kPageTableWindowSize;
+  if (count == 0) {
+    return false;
+  }
+
+  const uint64_t offset =
+      header.pageTableOffset + static_cast<uint64_t>(start) * sizeof(xtch::PageTableEntry);
+  const size_t bytes = static_cast<size_t>(count) * sizeof(xtch::PageTableEntry);
+  if (!file.seek64(offset) ||
+      static_cast<size_t>(file.read(reinterpret_cast<uint8_t*>(pageTableWindow), bytes)) != bytes) {
+    pageTableWindowCount = 0;
+    LOG_ERR("XTCH", "Page table window read failed (start=%lu count=%u)", static_cast<unsigned long>(start),
+            count);
+    return false;
+  }
+  pageTableWindowStart = start;
+  pageTableWindowCount = count;
+  LOG_DBG("XTCH", "Page table window [%lu, %lu)", static_cast<unsigned long>(start),
+          static_cast<unsigned long>(start + count));
   return true;
 }
 
@@ -288,14 +304,15 @@ bool XtchBook::readPageTableEntry(const uint32_t pageIndex, xtch::PageInfo& info
   if (pageIndex >= header.pageCount) {
     return false;
   }
-  if (pageTable && pageIndex < pageTableCount) {
-    const xtch::PageTableEntry& entry = pageTable[pageIndex];
+  if (ensurePageTableWindow(pageIndex)) {
+    const xtch::PageTableEntry& entry = pageTableWindow[pageIndex - pageTableWindowStart];
     info.offset = entry.dataOffset;
     info.size = entry.dataSize;
     info.width = entry.width;
     info.height = entry.height;
     return true;
   }
+  // Window refill failed; still try a single row so the page can load.
   if (!ensureOpen()) {
     return false;
   }
@@ -313,6 +330,53 @@ bool XtchBook::readPageTableEntry(const uint32_t pageIndex, xtch::PageInfo& info
   info.width = entry.width;
   info.height = entry.height;
   return true;
+}
+
+uint32_t XtchBook::clusterLruLookup(const uint32_t pageIndex) {
+  for (uint8_t i = 0; i < clusterLruCount; ++i) {
+    if (clusterLru[i].pageIndex != pageIndex) {
+      continue;
+    }
+    const uint32_t cluster = clusterLru[i].cluster;
+    if (i != 0) {
+      const ClusterLruSlot hit = clusterLru[i];
+      memmove(&clusterLru[1], &clusterLru[0], static_cast<size_t>(i) * sizeof(ClusterLruSlot));
+      clusterLru[0] = hit;
+    }
+    return cluster;
+  }
+  return 0;
+}
+
+void XtchBook::clusterLruRemember(const uint32_t pageIndex, const uint32_t cluster) {
+  if (cluster == 0) {
+    return;
+  }
+  uint8_t found = clusterLruCount;
+  for (uint8_t i = 0; i < clusterLruCount; ++i) {
+    if (clusterLru[i].pageIndex == pageIndex) {
+      found = i;
+      break;
+    }
+  }
+  if (found == 0 && clusterLruCount > 0 && clusterLru[0].pageIndex == pageIndex) {
+    clusterLru[0].cluster = cluster;
+    return;
+  }
+  const ClusterLruSlot slot{pageIndex, cluster};
+  if (found < clusterLruCount) {
+    memmove(&clusterLru[1], &clusterLru[0], static_cast<size_t>(found) * sizeof(ClusterLruSlot));
+    clusterLru[0] = slot;
+    return;
+  }
+  const uint8_t shift = clusterLruCount < kClusterLruSize ? clusterLruCount : static_cast<uint8_t>(kClusterLruSize - 1);
+  if (shift > 0) {
+    memmove(&clusterLru[1], &clusterLru[0], static_cast<size_t>(shift) * sizeof(ClusterLruSlot));
+  }
+  clusterLru[0] = slot;
+  if (clusterLruCount < kClusterLruSize) {
+    ++clusterLruCount;
+  }
 }
 
 bool XtchBook::pageInfo(const uint32_t pageIndex, xtch::PageInfo& info) { return readPageTableEntry(pageIndex, info); }
@@ -350,18 +414,18 @@ xtch::Error XtchBook::loadPageData(const uint32_t pageIndex) {
     return xtch::Error::OutOfMemory;
   }
 
-  const uint32_t cachedCluster = (pageCluster && pageIndex < pageTableCount) ? pageCluster[pageIndex] : 0;
+  const uint32_t cachedCluster = clusterLruLookup(pageIndex);
   if (cachedCluster != 0) {
     file.setPos(page.offset, cachedCluster);
   } else if (!file.seek64(page.offset)) {
     LOG_ERR("XTCH", "Seek page %lu offset %llu failed", static_cast<unsigned long>(pageIndex),
             static_cast<unsigned long long>(page.offset));
     return xtch::Error::ReadError;
-  } else if (pageCluster && pageIndex < pageTableCount) {
+  } else {
     uint64_t pos = 0;
     uint32_t cluster = 0;
     if (file.getPos(&pos, &cluster)) {
-      pageCluster[pageIndex] = cluster;
+      clusterLruRemember(pageIndex, cluster);
     }
   }
 
